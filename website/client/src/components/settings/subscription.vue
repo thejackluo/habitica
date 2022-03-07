@@ -185,8 +185,8 @@
           <div class="header-mini mb-3">
             {{ $t('subscriptionStats') }}
           </div>
-          <div class="d-flex justify-content-evenly">
-            <div>
+          <div class="d-flex">
+            <div class="stat-column">
               <div class="d-flex justify-content-center align-items-center">
                 <div
                   v-once
@@ -204,7 +204,7 @@
               </div>
             </div>
             <div class="stats-spacer"></div>
-            <div>
+            <div class="stat-column">
               <div class="d-flex justify-content-center align-items-center">
                 <div
                   v-once
@@ -221,7 +221,7 @@
               </div>
             </div>
             <div class="stats-spacer"></div>
-            <div>
+            <div class="stat-column">
               <div class="d-flex justify-content-center align-items-center">
                 <div
                   v-once
@@ -229,7 +229,7 @@
                   v-html="icons.hourglassIcon"
                 >
                 </div>
-                <div class="number-heavy">
+                <div class="number-heavy" v-b-tooltip.hover.top="nextHourGlassDate.format('L')">
                   {{ nextHourGlass }}
                 </div>
               </div>
@@ -354,7 +354,7 @@
   .cancel-card {
     width: 28rem;
     border: 2px solid $gray-500;
-    border-radius: 4px;
+    border-radius: 8px;
   }
 
   .disabled {
@@ -563,6 +563,10 @@
     text-align: center;
     color: $gray-100;
   }
+
+  .stat-column {
+    width: 33%;
+  }
 </style>
 
 <script>
@@ -762,10 +766,13 @@ export default {
     subscriptionEndDate () {
       return moment(this.user.purchased.plan.dateTerminated).format('MM/DD/YYYY');
     },
-    nextHourGlass () {
+    nextHourGlassDate () {
       const currentPlanContext = getPlanContext(this.user, new Date());
 
-      const nextHourglassMonth = currentPlanContext.nextHourglassDate.format('MMM');
+      return currentPlanContext.nextHourglassDate;
+    },
+    nextHourGlass () {
+      const nextHourglassMonth = this.nextHourGlassDate.format('MMM');
 
       return nextHourglassMonth;
     },
