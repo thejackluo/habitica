@@ -1,5 +1,5 @@
 <template>
-  <div v-if="user.permissions.userSupport">
+  <div v-if="hasPermission(user, 'userSupport')">
     <div
       v-if="hero && hero.profile"
       class="row"
@@ -41,6 +41,10 @@
         <items-owned
           :hero="hero"
           :reset-counter="resetCounter"
+        />
+
+        <transactions
+          :hero="hero"
         />
 
         <contributor-details
@@ -92,8 +96,9 @@ import PartyAndQuest from './partyAndQuest';
 import AvatarAndDrops from './avatarAndDrops';
 import PrivilegesAndGems from './privilegesAndGems';
 import ContributorDetails from './contributorDetails';
+import Transactions from './transactions';
 
-import { mapState } from '@/libs/store';
+import { userStateMixin } from '../../../mixins/userState';
 
 export default {
   components: {
@@ -104,7 +109,9 @@ export default {
     AvatarAndDrops,
     PrivilegesAndGems,
     ContributorDetails,
+    Transactions,
   },
+  mixins: [userStateMixin],
   data () {
     return {
       userIdentifier: '',
@@ -116,10 +123,6 @@ export default {
       adminHasPrivForParty: true,
     };
   },
-  computed: {
-    ...mapState({ user: 'user.data' }),
-  },
-
   watch: {
     userIdentifier () {
       // close modal if the page is opened in an existing tab from the modal
