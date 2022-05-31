@@ -13,7 +13,7 @@
               v-b-tooltip.hover="entry.createdAt"
             >{{ entry.createdAt | timeAgo }}</span>
           </td>
-          <td>
+          <td class="amount-column">
             <span
               class="svg-icon inline icon-24"
               aria-hidden="true"
@@ -21,14 +21,30 @@
             ></span>
             <span
               class="amount gems"
-              :class="entry.amount < 0 ? 'deducted' : 'added'"
+              :class="entry.amount | addedDeducted"
             >{{ entry.amount * 4 }}</span>
           </td>
           <td>
             <span>{{ transactionTypeText(entry.transactionType) }}</span>
           </td>
           <td>
-            <span v-html="entryReferenceText(entry)"></span>
+            <span v-if="['gift_send', 'gift_receive'].includes(entry.transactionType)">
+              <user-link
+                :user-id="entry.reference"
+                :name="entry.referenceText"
+              />
+            </span>
+            <span v-else v-html="entryReferenceText(entry)"></span>
+          </td>
+          <td v-if="entry.currentAmount">
+            <span
+              class="svg-icon inline icon-24"
+              aria-hidden="true"
+              v-html="icons.gem"
+            ></span>
+            <span
+              class="amount gems"
+            >{{ entry.currentAmount * 4 }}</span>
           </td>
         </tr>
       </table>
@@ -46,7 +62,7 @@
               v-b-tooltip.hover="entry.createdAt"
             >{{ entry.createdAt | timeAgo }}</span>
           </td>
-          <td>
+          <td class="amount-column">
             <span
               class="svg-icon inline icon-24"
               aria-hidden="true"
@@ -54,7 +70,7 @@
             ></span>
             <span
               class="amount hourglasses"
-              :class="entry.amount < 0 ? 'deducted' : 'added'"
+              :class="entry.amount | addedDeducted"
             >{{ entry.amount }}</span>
           </td>
           <td>
@@ -71,6 +87,10 @@
 
 <style lang="scss">
   @import '~@/assets/scss/colors.scss';
+
+  .amount-column {
+    white-space: nowrap;
+  }
 
   .svg-icon {
     vertical-align: middle;
@@ -108,8 +128,10 @@
 import moment from 'moment';
 import svgGem from '@/assets/svg/gem.svg';
 import svgHourglass from '@/assets/svg/hourglass.svg';
+import userLink from '@/components/userLink';
 
 export default {
+  components: { userLink },
   filters: {
     timeAgo (value) {
       return moment(value).fromNow();
@@ -117,6 +139,13 @@ export default {
     date (value) {
       // @TODO: Vue doesn't support this so we cant user preference
       return moment(value).toDate().toString();
+    },
+    addedDeducted (amount) {
+      if (amount === 0) {
+        return '';
+      }
+
+      return amount < 0 ? 'deducted' : 'added';
     },
   },
   props: {
