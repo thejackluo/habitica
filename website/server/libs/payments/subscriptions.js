@@ -1,6 +1,9 @@
 // TODO these files need to refactored.
 
-import _ from 'lodash';
+import defaults from 'lodash/defaults';
+import each from 'lodash/each';
+import find from 'lodash/find';
+import pick from 'lodash/pick';
 import moment from 'moment';
 
 import { getAnalyticsServiceByEnvironment } from '../analyticsService';
@@ -30,7 +33,7 @@ const analytics = getAnalyticsServiceByEnvironment();
 
 function _findMysteryItems (user, dateMoment) {
   const pushedItems = [];
-  _.each(shared.content.gear.flat, item => {
+  each(shared.content.gear.flat, item => {
     if (
       item.klass === 'mystery'
         && shared.content.mystery[item.mystery]
@@ -74,7 +77,39 @@ async function prepareSubscriptionValues (data) {
     ? data.gift.subscription.key
     : data.sub.key];
   const autoRenews = data.autoRenews !== undefined ? data.autoRenews : true;
-  const months = Number(block.months);
+  const updatedFrom = data.updatedFrom
+    ? shared.content.subscriptionBlocks[data.updatedFrom.key]
+    : undefined;
+  let months;
+  if (updatedFrom && Number(updatedFrom.months) !== 1) {
+    if (Number(updatedFrom.months) > Number(block.months)) {
+      months = 0;
+    } else if (data.updatedFrom.logic === 'payDifference') {
+      months = Math.max(0, Number(block.months) - Number(updatedFrom.months));
+    } else if (data.updatedFrom.logic === 'payFull') {
+      months = Number(block.months);
+    } else if (data.updatedFrom.logic === 'refundAndRepay') {
+      const originalMonths = Number(updatedFrom.months);
+      let currentCycleBegin = moment(recipient.purchased.plan.dateCurrentTypeCreated);
+      const today = moment();
+      while (currentCycleBegin.isBefore()) {
+        currentCycleBegin = currentCycleBegin.add({ months: originalMonths });
+      }
+      // Subtract last iteration again, because we overshot
+      currentCycleBegin = currentCycleBegin.subtract({ months: originalMonths });
+      // For simplicity we round every month to 30 days since moment can not add half months
+      if (currentCycleBegin.add({ days: (originalMonths * 30) / 2.0 }).isBefore(today)) {
+        // user is in second half of their subscription cycle. Give them full benefits.
+        months = Number(block.months);
+      } else {
+        // user is in first half of their subscription cycle. Give them the difference.
+        months = Math.max(0, Number(block.months) - Number(updatedFrom.months));
+      }
+    }
+  }
+  if (months === undefined) {
+    months = Number(block.months);
+  }
   const today = new Date();
   let group;
   let groupId;
@@ -82,6 +117,7 @@ async function prepareSubscriptionValues (data) {
   let purchaseType = 'subscribe';
   let emailType = 'subscription-begins';
   let recipientIsSubscribed = recipient.isSubscribed();
+  const isNewSubscription = !recipientIsSubscribed;
 
   //  If we are buying a group subscription
   if (data.groupId) {
@@ -136,6 +172,7 @@ async function prepareSubscriptionValues (data) {
         plan.dateTerminated = moment().add({ months }).toDate();
         plan.dateCreated = today;
       }
+      plan.dateCurrentTypeCreated = today;
     }
 
     if (!plan.customerId) {
@@ -152,6 +189,7 @@ async function prepareSubscriptionValues (data) {
       planId: block.key,
       customerId: data.customerId,
       dateUpdated: today,
+      dateCurrentTypeCreated: today,
       paymentMethod: data.paymentMethod,
       extraMonths: Number(plan.extraMonths) + _dateDiff(today, plan.dateTerminated),
       dateTerminated: null,
@@ -165,18 +203,11 @@ async function prepareSubscriptionValues (data) {
       owner: data.user._id,
     });
 
-    // allow non-override if a plan was previously used
-    if (!plan.gemsBought) {
-      plan.gemsBought = 0;
-    }
-
-    if (!plan.dateCreated) {
-      plan.dateCreated = today;
-    }
-
-    if (!plan.mysteryItems) {
-      plan.mysteryItems = [];
-    }
+    defaults(plan, {
+      gemsBought: 0,
+      dateCreated: today,
+      mysteryItems: [],
+    });
 
     if (data.subscriptionId) {
       plan.subscriptionId = data.subscriptionId;
@@ -194,6 +225,7 @@ async function prepareSubscriptionValues (data) {
     itemPurchased,
     purchaseType,
     emailType,
+    isNewSubscription,
   };
 }
 
@@ -209,17 +241,8 @@ async function createSubscription (data) {
     itemPurchased,
     purchaseType,
     emailType,
+    isNewSubscription,
   } = await prepareSubscriptionValues(data);
-
-  // Block sub perks
-  const perks = Math.floor(months / 3);
-  if (perks) {
-    plan.consecutive.offset += months;
-    plan.consecutive.gemCapExtra += perks * 5;
-    if (plan.consecutive.gemCapExtra > 25) plan.consecutive.gemCapExtra = 25;
-    await plan.updateHourglasses(recipient._id, perks, 'subscription_perks'); // one Hourglass every 3 months
-  }
-
   if (recipient !== group) {
     recipient.items.pets['Jackalope-RoyalPurple'] = 5;
     recipient.markModified('items.pets');
@@ -229,6 +252,23 @@ async function createSubscription (data) {
   // @TODO: Create a factory pattern for use cases
   if (!data.gift && data.customerId !== paymentConstants.GROUP_PLAN_CUSTOMER_ID) {
     txnEmail(data.user, emailType);
+  }
+
+  if (months > 0) {
+    if (block.months === 12) {
+      recipient.purchased.plan.consecutive.gemCapExtra = 26;
+    }
+    const { lastHourglassReceived } = recipient.purchased.plan.consecutive;
+
+    if (block.months === 12 && autoRenews && !data.gift
+      && !recipient.purchased.plan.hourglassPromoReceived) {
+      recipient.purchased.plan.hourglassPromoReceived = new Date();
+      await plan.updateHourglasses(recipient._id, 12, 'subscription_bonus');
+    }
+    if (isNewSubscription
+      && (lastHourglassReceived === null || lastHourglassReceived === undefined || !moment().isSame(lastHourglassReceived, 'month'))) {
+      await plan.updateHourglasses(recipient._id, 1, 'subscription_perks');
+    }
   }
 
   if (!group && !data.promo) data.user.purchased.txnCount += 1;
@@ -302,7 +342,7 @@ async function createSubscription (data) {
     // Only send push notifications if sending to a user other than yourself
     if (data.gift.member._id !== data.user._id) {
       const currentEventList = getCurrentEventList();
-      const currentEvent = _.find(currentEventList, event => Boolean(event.promo));
+      const currentEvent = find(currentEventList, event => Boolean(event.promo));
       if (currentEvent && currentEvent.promo === 'g1g1') {
         const promoData = {
           user: data.user,
@@ -320,13 +360,15 @@ async function createSubscription (data) {
       }
 
       if (data.gift.member.preferences.pushNotifications.giftedSubscription !== false) {
-        sendPushNotification(data.gift.member,
+        await sendPushNotification(
+          data.gift.member,
           {
             title: shared.i18n.t('giftedSubscription', languages[1]),
             message: shared.i18n.t('giftedSubscriptionInfo', { months, name: byUserName }, languages[1]),
             identifier: 'giftedSubscription',
             payload: { replyTo: data.user._id },
-          });
+          },
+        );
       }
     }
   }
@@ -398,7 +440,9 @@ async function cancelSubscription (data) {
   }
 
   plan.dateTerminated = calculateSubscriptionTerminationDate(
-    data.nextBill, plan, paymentConstants.GROUP_PLAN_CUSTOMER_ID,
+    data.nextBill,
+    plan,
+    paymentConstants.GROUP_PLAN_CUSTOMER_ID,
   );
 
   // clear extra time. If they subscribe again, it'll be recalculated from p.dateTerminated
@@ -421,9 +465,8 @@ async function cancelSubscription (data) {
 
   analytics.track(cancelType, {
     uuid: data.user._id,
+    user: pick(data.user, ['preferences', 'registeredThrough']),
     groupId,
-    gaCategory: 'commerce',
-    gaLabel: data.paymentMethod,
     paymentMethod: data.paymentMethod,
     headers: data.headers,
   });

@@ -78,6 +78,7 @@ export default {
         orderReferenceId: null,
         subscription: null,
         coupon: null,
+        sku: null,
       },
       isAmazonSetup: false,
       amazonButtonEnabled: false,
@@ -134,7 +135,7 @@ export default {
   methods: {
     amazonInitWidgets () {
       const walletParams = {
-        sellerId: process.env.AMAZON_PAYMENTS_SELLER_ID, // @TODO: Import
+        sellerId: import.meta.env.AMAZON_PAYMENTS_SELLER_ID, // @TODO: Import
         design: {
           designMode: 'responsive',
         },
@@ -149,7 +150,7 @@ export default {
           this.amazonPayments.billingAgreementId = billingAgreement.getAmazonBillingAgreementId();
 
           new window.OffAmazonPayments.Widgets.Consent({
-            sellerId: process.env.AMAZON_PAYMENTS_SELLER_ID,
+            sellerId: import.meta.env.AMAZON_PAYMENTS_SELLER_ID,
             amazonBillingAgreementId: this.amazonPayments.billingAgreementId,
             design: {
               designMode: 'responsive',
@@ -174,7 +175,10 @@ export default {
     storePaymentStatusAndReload (url) {
       let paymentType;
 
-      if (this.amazonPayments.type === 'single' && !this.amazonPayments.gift) paymentType = 'gems';
+      if (this.amazonPayments.type === 'single') {
+        if (this.amazonPayments.sku) paymentType = 'sku';
+        else if (!this.amazonPayments.gift) paymentType = 'gems';
+      }
       if (this.amazonPayments.type === 'subscription') paymentType = 'subscription';
       if (this.amazonPayments.groupId || this.amazonPayments.groupToCreate) paymentType = 'groupPlan';
       if (this.amazonPayments.type === 'single' && this.amazonPayments.gift && this.amazonPayments.giftReceiver) {
@@ -223,6 +227,7 @@ export default {
         const data = {
           orderReferenceId: this.amazonPayments.orderReferenceId,
           gift: this.amazonPayments.gift,
+          sku: this.amazonPayments.sku,
         };
 
         if (this.amazonPayments.gemsBlock) {

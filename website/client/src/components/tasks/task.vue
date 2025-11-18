@@ -1,11 +1,15 @@
 <template>
-  <div class="task-wrapper" draggable>
+  <div
+    class="task-wrapper"
+    draggable
+  >
     <div
       class="task transition"
       :class="[{
         'groupTask': task.group.id,
         'task-not-editable': !teamManagerAccess,
         'task-not-scoreable': showTaskLockIcon,
+        'link-exempt': !isChallengeTask && !isGroupTask,
       }, `type_${task.type}`
       ]"
       @click="castEnd($event, task)"
@@ -31,6 +35,9 @@
               'task-not-scoreable': showTaskLockIcon,
             }, controlClass.up.inner]"
             tabindex="0"
+            role="button"
+            :aria-label="$t('scoreUp')"
+            :aria-disabled="showTaskLockIcon || (!task.up && !showTaskLockIcon)"
             @click="score('up')"
             @keypress.enter="score('up')"
           >
@@ -62,6 +69,7 @@
               controlClass.inner,
             ]"
             tabindex="0"
+            role="checkbox"
             @click="score(showCheckIcon ? 'down' : 'up' )"
             @keypress.enter="score(showCheckIcon ? 'down' : 'up' )"
           >
@@ -240,7 +248,7 @@
             >
               <div
                 v-b-tooltip.hover.bottom="$t('dueDate')"
-                class="svg-icon calendar"
+                class="svg-icon calendar my-auto"
                 v-html="icons.calendar"
               ></div>
               <span>{{ formatDueDate() }}</span>
@@ -358,6 +366,9 @@
               'task-not-scoreable': showTaskLockIcon,
             }, controlClass.down.inner]"
             tabindex="0"
+            role="button"
+            :aria-label="$t('scoreDown')"
+            :aria-disabled="showTaskLockIcon || (!task.down && !showTaskLockIcon)"
             @click="score('down')"
             @keypress.enter="score('down')"
           >
@@ -412,7 +423,7 @@
 
 <!-- eslint-disable max-len -->
 <style lang="scss" scoped>
-  @import '~@/assets/scss/colors.scss';
+  @import '@/assets/scss/colors.scss';
   .task-best-control-inner-habit:focus {
     transition: none;
   }
@@ -700,7 +711,7 @@
 
   .icons {
     margin-top: 4px;
-    color: $gray-300;
+    color: $gray-100;
     font-style: normal;
 
     &-right {
@@ -759,7 +770,7 @@
   }
 
   .due-overdue {
-    color: $red-50;
+    color: $maroon-10;
   }
 
   .calendar.svg-icon {
@@ -898,29 +909,29 @@
   }
 </style>
 <!-- eslint-enable max-len -->
-
+<!-- eslint-disable-next-line vue/component-tags-order -->
 <script>
 import moment from 'moment';
 import { v4 as uuid } from 'uuid';
 import isEmpty from 'lodash/isEmpty';
 import { mapState, mapGetters, mapActions } from '@/libs/store';
 
-import positiveIcon from '@/assets/svg/positive.svg';
-import negativeIcon from '@/assets/svg/negative.svg';
-import goldIcon from '@/assets/svg/gold.svg';
-import streakIcon from '@/assets/svg/streak.svg';
-import calendarIcon from '@/assets/svg/calendar.svg';
-import challengeIcon from '@/assets/svg/challenge.svg';
-import brokenChallengeIcon from '@/assets/svg/broken-megaphone.svg';
-import tagsIcon from '@/assets/svg/tags.svg';
-import checkIcon from '@/assets/svg/check.svg';
-import editIcon from '@/assets/svg/edit.svg';
-import topIcon from '@/assets/svg/top.svg';
-import bottomIcon from '@/assets/svg/bottom.svg';
-import deleteIcon from '@/assets/svg/delete.svg';
-import checklistIcon from '@/assets/svg/checklist.svg';
-import lockIcon from '@/assets/svg/lock.svg';
-import menuIcon from '@/assets/svg/menu.svg';
+import positiveIcon from '@/assets/svg/positive.svg?raw';
+import negativeIcon from '@/assets/svg/negative.svg?raw';
+import goldIcon from '@/assets/svg/gold.svg?raw';
+import streakIcon from '@/assets/svg/streak.svg?raw';
+import calendarIcon from '@/assets/svg/calendar.svg?raw';
+import challengeIcon from '@/assets/svg/challenge.svg?raw';
+import brokenChallengeIcon from '@/assets/svg/broken-megaphone.svg?raw';
+import tagsIcon from '@/assets/svg/tags.svg?raw';
+import checkIcon from '@/assets/svg/check.svg?raw';
+import editIcon from '@/assets/svg/edit.svg?raw';
+import topIcon from '@/assets/svg/top.svg?raw';
+import bottomIcon from '@/assets/svg/bottom.svg?raw';
+import deleteIcon from '@/assets/svg/delete.svg?raw';
+import checklistIcon from '@/assets/svg/checklist.svg?raw';
+import lockIcon from '@/assets/svg/lock.svg?raw';
+import menuIcon from '@/assets/svg/menu.svg?raw';
 import markdownDirective from '@/directives/markdown';
 import scoreTask from '@/mixins/scoreTask';
 import sync from '@/mixins/sync';
@@ -1125,13 +1136,13 @@ export default {
       return moment.duration(endOfDueDate.diff(endOfToday));
     },
     checkIfOverdue () {
-      return this.calculateTimeTillDue().asDays() <= 0;
+      return this.calculateTimeTillDue().asDays() < 0;
     },
     formatDueDate () {
-      const timeTillDue = this.calculateTimeTillDue();
-      const dueIn = timeTillDue.asDays() === 0 ? this.$t('today') : timeTillDue.humanize(true);
-
-      return this.task.date && this.$t('dueIn', { dueIn });
+      if (moment().isSame(this.task.date, 'day')) {
+        return this.$t('today');
+      }
+      return moment(this.task.date).format(this.user.preferences.dateFormat.toUpperCase());
     },
     edit (e, task) {
       if (this.isRunningYesterdailies) return;

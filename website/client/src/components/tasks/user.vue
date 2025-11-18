@@ -173,15 +173,17 @@
             id="create-task-btn"
             class="btn btn-primary create-btn d-flex align-items-center"
             :class="{open: openCreateBtn}"
+            tabindex="0"
             @click.stop.prevent="openCreateBtn = !openCreateBtn"
             @keypress.enter="openCreateBtn = !openCreateBtn"
-            tabindex="0"
           >
             <div
               class="svg-icon icon-10 color"
               v-html="icons.positive"
             ></div>
-            <div class="ml-75 mr-1"> {{ $t('addTask') }} </div>
+            <div class="ml-75 mr-1">
+              {{ $t('addTask') }}
+            </div>
           </div>
           <div
             v-if="openCreateBtn"
@@ -190,8 +192,8 @@
             <div
               v-for="type in columns"
               :key="type"
-              @click="createTask(type)"
               class="dropdown-item d-flex px-2 py-1"
+              @click="createTask(type)"
             >
               <div class="d-flex align-items-center justify-content-center task-icon">
                 <div
@@ -227,8 +229,8 @@
 </template>
 
 <style lang="scss" scoped>
-  @import '~@/assets/scss/colors.scss';
-  @import '~@/assets/scss/create-task.scss';
+  @import '@/assets/scss/colors.scss';
+  @import '@/assets/scss/create-task.scss';
 
   .user-tasks-page {
     padding-left: 12px;
@@ -276,7 +278,6 @@
       a {
         font-size: 12px;
         line-height: 1.33;
-        color: $blue-10;
         margin-top: 4px;
 
         &:focus, &:hover, &:active {
@@ -300,7 +301,7 @@
       border-bottom: 1px solid $gray-500 !important;
       background-size: 10px 10px;
       padding-left: 40px;
-      background-image: url(~@/assets/svg/for-css/positive.svg);
+      background-image: url(@/assets/svg/for-css/positive.svg);
     }
 
     .tag-edit-item {
@@ -386,23 +387,23 @@ import Vue from 'vue';
 import throttle from 'lodash/throttle';
 import cloneDeep from 'lodash/cloneDeep';
 import draggable from 'vuedraggable';
+import taskDefaults from '@/../../common/script/libs/taskDefaults';
 import TaskColumn from './column';
 import TaskModal from './taskModal';
 import TaskSummary from './taskSummary';
 import spells from './spells';
 import markdown from '@/directives/markdown';
 
-import positiveIcon from '@/assets/svg/positive.svg';
-import filterIcon from '@/assets/svg/filter.svg';
-import deleteIcon from '@/assets/svg/delete.svg';
-import habitIcon from '@/assets/svg/habit.svg';
-import dailyIcon from '@/assets/svg/daily.svg';
-import todoIcon from '@/assets/svg/todo.svg';
-import rewardIcon from '@/assets/svg/reward.svg';
-import dragIcon from '@/assets/svg/drag_indicator.svg';
+import positiveIcon from '@/assets/svg/positive.svg?raw';
+import filterIcon from '@/assets/svg/filter.svg?raw';
+import deleteIcon from '@/assets/svg/delete.svg?raw';
+import habitIcon from '@/assets/svg/habit.svg?raw';
+import dailyIcon from '@/assets/svg/daily.svg?raw';
+import todoIcon from '@/assets/svg/todo.svg?raw';
+import rewardIcon from '@/assets/svg/reward.svg?raw';
+import dragIcon from '@/assets/svg/drag_indicator.svg?raw';
 
 import { mapState, mapActions } from '@/libs/store';
-import taskDefaults from '@/../../common/script/libs/taskDefaults';
 import brokenTaskModal from './brokenTaskModal';
 
 export default {
@@ -487,6 +488,15 @@ export default {
     this.$store.dispatch('common:setTitle', {
       section: this.$t('tasks'),
     });
+    if (this.$store.state.postLoadModal) {
+      const modalToLoad = this.$store.state.postLoadModal;
+      if (modalToLoad.includes('profile')) {
+        this.$router.push(modalToLoad);
+      } else {
+        this.$root.$emit('bv::show::modal', modalToLoad);
+      }
+      this.$store.state.postLoadModal = '';
+    }
   },
   methods: {
     ...mapActions({ setUser: 'user:set' }),

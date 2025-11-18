@@ -14,10 +14,12 @@ import { // eslint-disable-line import/no-cycle
   basicFields as basicGroupFields,
 } from '../../../models/group';
 import shared from '../../../../common';
-import { applyGemPayment } from './oneTimePayments'; // eslint-disable-line import/no-cycle
+import { applyGemPayment, applySku } from './oneTimePayments'; // eslint-disable-line import/no-cycle
 import { applySubscription, handlePaymentMethodChange } from './subscriptions'; // eslint-disable-line import/no-cycle
 
 const endpointSecret = nconf.get('STRIPE_WEBHOOKS_ENDPOINT_SECRET');
+
+const BASE_URL = nconf.get('BASE_URL');
 
 export async function handleWebhooks (options, stripeInc) {
   const { body, headers } = options;
@@ -67,12 +69,18 @@ export async function handleWebhooks (options, stripeInc) {
         const session = event.data.object;
         const { metadata } = session;
 
+        if (metadata.server_url !== BASE_URL) {
+          break;
+        }
+
         if (metadata.type === 'edit-card-group' || metadata.type === 'edit-card-user') {
           await handlePaymentMethodChange(session);
-        } else if (metadata.type !== 'subscription') {
-          await applyGemPayment(session);
-        } else {
+        } else if (metadata.type === 'subscription') {
           await applySubscription(session);
+        } else if (metadata.type === 'sku') {
+          await applySku(session);
+        } else {
+          await applyGemPayment(session);
         }
 
         break;

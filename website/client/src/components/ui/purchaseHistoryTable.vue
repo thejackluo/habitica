@@ -20,23 +20,38 @@
     </div>
 
     <div class="row">
-      <div class="col-12" v-if="selectedTab === 'gems'">
+      <div
+        v-if="selectedTab === 'gems'"
+        class="col-12"
+      >
         <span v-if="gemTransactions.length === 0">
           {{ $t('noGemTransactions') }}
         </span>
         <table class="table">
           <tr>
-            <th v-once class="timestamp-column">
-              {{ $t('timestamp')}}
+            <th
+              v-once
+              class="timestamp-column"
+            >
+              {{ $t('timestamp') }}
             </th>
-            <th v-once class="amount-column">
-              {{ $t('amount')}}
+            <th
+              v-once
+              class="amount-column"
+            >
+              {{ $t('amount') }}
             </th>
-            <th v-once class="action-column">
-              {{ $t('action')}}
+            <th
+              v-once
+              class="action-column"
+            >
+              {{ $t('action') }}
             </th>
-            <th v-once class="note-column">
-              {{ $t('note')}}
+            <th
+              v-once
+              class="note-column"
+            >
+              {{ $t('note') }}
             </th>
           </tr>
           <tr
@@ -49,7 +64,10 @@
               >{{ entry.createdAt | timeAgo }}</span>
             </td>
             <td>
-              <div class="amount-with-icon" :id="entry.id">
+              <div
+                :id="entry.id"
+                class="amount-with-icon"
+              >
                 <span
                   class="svg-icon inline icon-16 my-1"
                   aria-hidden="true"
@@ -95,39 +113,58 @@
               </span>
               <span v-else-if="transactionTypes.challenges.includes(entry.transactionType)">
                 <router-link
-                    class="challenge-link"
-                    :to="{ name: 'challenge', params: { challengeId: entry.reference } }">
+                  class="challenge-link"
+                  :to="{ name: 'challenge', params: { challengeId: entry.reference } }"
+                >
                   <span
                     v-markdown="entry.referenceText"
                   ></span>
                 </router-link>
               </span>
-              <span v-else v-html="entryReferenceText(entry)"></span>
+              <span
+                v-else
+                v-html="entryReferenceText(entry)"
+              ></span>
 
               <span v-if="entry.reference">
-                ({{entry.reference}})
+                ({{ entry.reference }})
               </span>
             </td>
           </tr>
         </table>
       </div>
-      <div class="col-12" v-if="selectedTab === 'hourglass'">
+      <div
+        v-if="selectedTab === 'hourglass'"
+        class="col-12"
+      >
         <span v-if="hourglassTransactions.length === 0">
           {{ $t('noHourglassTransactions') }}
         </span>
         <table class="table">
           <tr>
-            <th v-once class="timestamp-column">
-              {{ $t('timestamp')}}
+            <th
+              v-once
+              class="timestamp-column"
+            >
+              {{ $t('timestamp') }}
             </th>
-            <th v-once class="amount-column">
-              {{ $t('amount')}}
+            <th
+              v-once
+              class="amount-column"
+            >
+              {{ $t('amount') }}
             </th>
-            <th v-once class="action-column">
-              {{ $t('action')}}
+            <th
+              v-once
+              class="action-column"
+            >
+              {{ $t('action') }}
             </th>
-            <th v-once class="note-column">
-              {{ $t('note')}}
+            <th
+              v-once
+              class="note-column"
+            >
+              {{ $t('note') }}
             </th>
           </tr>
           <tr
@@ -140,7 +177,10 @@
               >{{ entry.createdAt | timeAgo }}</span>
             </td>
             <td>
-              <div class="amount-with-icon" :id="entry.id">
+              <div
+                :id="entry.id"
+                class="amount-with-icon"
+              >
                 <span
                   class="svg-icon inline icon-16 my-1"
                   aria-hidden="true"
@@ -182,12 +222,11 @@
         </table>
       </div>
     </div>
-
   </div>
 </template>
 
 <style lang="scss" scoped>
-  @import '~@/assets/scss/colors.scss';
+  @import '@/assets/scss/colors.scss';
 
   .page-header.btn-flat {
     background: transparent;
@@ -279,13 +318,18 @@
     color: $gray-50;
   }
 
+  td span {
+    line-break: anywhere;
+  }
+
   th, td {
     padding-top: 0.35rem !important;
     padding-bottom: 0.35rem !important;
   }
 
   .timestamp-column, .action-column  {
-    width: 20%;
+    width: 27%;
+
   }
 
   .amount-column {
@@ -293,11 +337,7 @@
   }
 
   .note-column {
-    width: 50%;
-  }
-
-  .challenge-link, .user-link {
-    color: $blue-10 !important;
+    width: 35%;
   }
 
   .entry-action {
@@ -309,10 +349,10 @@
 
 <script>
 import moment from 'moment';
-import svgGem from '@/assets/svg/gem.svg';
-import svgGemRed from '@/assets/svg/gem-red.svg';
-import svgHourglass from '@/assets/svg/hourglass.svg';
-import svgHourglassRed from '@/assets/svg/hourglass-red.svg';
+import svgGem from '@/assets/svg/gem.svg?raw';
+import svgGemRed from '@/assets/svg/gem-red.svg?raw';
+import svgHourglass from '@/assets/svg/hourglass.svg?raw';
+import svgHourglassRed from '@/assets/svg/hourglass-red.svg?raw';
 import markdownDirective from '@/directives/markdown';
 
 export default {

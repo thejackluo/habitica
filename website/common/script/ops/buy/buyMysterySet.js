@@ -1,5 +1,6 @@
 import get from 'lodash/get';
 import each from 'lodash/each';
+import pick from 'lodash/pick';
 import i18n from '../../i18n';
 import content from '../../content/index';
 import {
@@ -7,7 +8,7 @@ import {
   NotAuthorized,
   NotFound,
 } from '../../libs/errors';
-import errorMessage from '../../libs/errorMessage';
+import { errorMessage } from '../../libs/errorMessage';
 import updateUserHourglasses from '../updateUserHourglasses';
 import { removeItemByPath } from '../pinnedGearUtils';
 import getItemInfo from '../../libs/getItemInfo';
@@ -20,7 +21,7 @@ export default async function buyMysterySet (user, req = {}, analytics) {
     throw new NotAuthorized(i18n.t('notEnoughHourglasses', req.language));
   }
 
-  const ref = content.timeTravelerStore(user);
+  const ref = content.timeTravelerStore(user, new Date());
   const mysterySet = ref ? ref[key] : undefined;
 
   if (!mysterySet) {
@@ -36,6 +37,7 @@ export default async function buyMysterySet (user, req = {}, analytics) {
 
   if (analytics) {
     analytics.track('buy', {
+      user: pick(user, ['preferences', 'registeredThrough']),
       uuid: user._id,
       itemKey: mysterySet.key,
       itemType: 'Subscriber Gear',

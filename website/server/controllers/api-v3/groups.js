@@ -1,6 +1,15 @@
-import _ from 'lodash';
+import assign from 'lodash/assign';
+import escapeRegExp from 'lodash/escapeRegExp';
+import find from 'lodash/find';
+import findIndex from 'lodash/findIndex';
+import includes from 'lodash/includes';
+import isArray from 'lodash/isArray';
+import mergeWith from 'lodash/mergeWith';
+import pick from 'lodash/pick';
+import uniqBy from 'lodash/uniqBy';
 import nconf from 'nconf';
-import { authWithHeaders } from '../../middlewares/auth';
+import moment from 'moment';
+import { authWithHeaders, chatPrivilegesRequired } from '../../middlewares/auth';
 import {
   model as Group,
   basicFields as basicGroupFields,
@@ -25,8 +34,12 @@ import common from '../../../common';
 import payments from '../../libs/payments/payments';
 import stripePayments from '../../libs/payments/stripe';
 import amzLib from '../../libs/payments/amazon';
-import apiError from '../../libs/apiError';
+import { apiError } from '../../libs/apiError';
 import { model as UserNotification } from '../../models/userNotification';
+import {
+  leaveGroup,
+  removeMessagesFromMember,
+} from '../../libs/groups';
 
 const { MAX_SUMMARY_SIZE_FOR_GUILDS } = common.constants;
 const MAX_EMAIL_INVITES_BY_USER = 200;
@@ -84,8 +97,6 @@ const api = {};
  * @apiError (401) {NotAuthorized} messageInsufficientGems User does not have enough gems (4)
  * @apiError (401) {NotAuthorized} partyMustbePrivate Party must have privacy set to private
  * @apiError (401) {NotAuthorized} messageGroupAlreadyInParty
- * @apiError (401) {NotAuthorized} chatPrivilegesRevoked You cannot do this because your chat
-                                                         privileges have been removed...
  *
  * @apiSuccess (201) {Object} data The created group (See <a href="https://github.com/HabitRPG/habitica/blob/develop/website/server/models/group.js" target="_blank">/website/server/models/group.js</a>)
  *
@@ -125,22 +136,17 @@ api.createGroup = {
     if (validationErrors) throw validationErrors;
 
     if (group.type === 'guild') {
-      if (group.privacy === 'public' && user.flags.chatRevoked) throw new NotAuthorized(res.t('chatPrivilegesRevoked'));
-      if (user.balance < 1) throw new NotAuthorized(res.t('messageInsufficientGems'));
-
-      group.balance = 1;
-
-      await user.updateBalance(-1, 'create_guild', group._id, group.name);
-      user.guilds.push(group._id);
-      if (!user.achievements.joinedGuild) {
-        user.achievements.joinedGuild = true;
-        user.addNotification('GUILD_JOINED_ACHIEVEMENT');
+      if (!user.hasPermission('fullAccess')) {
+        throw new BadRequest(res.t('featureRetired'));
       }
+      group.balance = 1;
+      user.guilds.push(group._id);
     } else {
       if (group.privacy !== 'private') throw new NotAuthorized(res.t('partyMustbePrivate'));
       if (user.party._id) throw new NotAuthorized(res.t('messageGroupAlreadyInParty'));
 
       user.party._id = group._id;
+      user.party.seeking = undefined;
     }
 
     let savedGroup;
@@ -161,10 +167,12 @@ api.createGroup = {
     };
 
     const analyticsObject = {
+      user: pick(user, ['preferences', 'registeredThrough']),
       uuid: user._id,
       hitType: 'event',
       category: 'behavior',
       owner: true,
+      groupId: savedGroup._id,
       groupType: savedGroup.type,
       privacy: savedGroup.privacy,
       headers: req.headers,
@@ -210,10 +218,12 @@ api.createGroupPlan = {
     const savedGroup = results[1];
 
     res.analytics.track('join group', {
+      user: pick(user, ['preferences', 'registeredThrough']),
       uuid: user._id,
       hitType: 'event',
       category: 'behavior',
       owner: true,
+      groupId: savedGroup._id,
       groupType: savedGroup.type,
       privacy: savedGroup.privacy,
       headers: req.headers,
@@ -320,11 +330,11 @@ api.getGroups = {
     const types = req.query.type.split(',');
 
     const paginate = req.query.paginate === 'true';
-    if (paginate && !_.includes(types, 'publicGuilds')) {
+    if (paginate && !includes(types, 'publicGuilds')) {
       throw new BadRequest(apiError('guildsOnlyPaginate'));
     }
 
-    const groupFields = basicGroupFields.concat(' description memberCount balance');
+    const groupFields = basicGroupFields.concat(' description memberCount balance leaderOnly');
     const sort = '-memberCount';
 
     const filters = {};
@@ -354,7 +364,7 @@ api.getGroups = {
 
     if (req.query.search) {
       filters.$or = [];
-      const searchWords = _.escapeRegExp(req.query.search.trim()).split(/\s+/).join('|');
+      const searchWords = escapeRegExp(req.query.search.trim()).split(/\s+/).join('|');
       const searchQuery = { $regex: new RegExp(`${searchWords}`, 'i') };
       filters.$or.push({ name: searchQuery });
       filters.$or.push({ summary: searchQuery });
@@ -490,19 +500,21 @@ api.updateGroup = {
     if (group.leader !== user._id && group.type === 'party') throw new NotAuthorized(res.t('messageGroupOnlyLeaderCanUpdate'));
     else if (group.leader !== user._id && !user.hasPermission('moderator')) throw new NotAuthorized(res.t('messageGroupOnlyLeaderCanUpdate'));
 
-    if (req.body.leader !== user._id && group.hasNotCancelled()) throw new NotAuthorized(res.t('cannotChangeLeaderWithActiveGroupPlan'));
+    if (req.body.leader && req.body.leader !== user._id && group.hasNotCancelled()) {
+      throw new NotAuthorized(res.t('cannotChangeLeaderWithActiveGroupPlan'));
+    }
 
     const handleArrays = (currentValue, updatedValue) => {
-      if (!_.isArray(currentValue)) {
+      if (!isArray(currentValue)) {
         return undefined;
       }
 
       // Previously, categories could get duplicated. By making the updated category list unique,
       // the duplication issue is fixed on every group edit
-      return _.uniqBy(updatedValue, 'slug');
+      return uniqBy(updatedValue, 'slug');
     };
 
-    _.assign(group, _.mergeWith(group.toObject(), Group.sanitizeUpdate(req.body), handleArrays));
+    assign(group, mergeWith(group.toObject(), Group.sanitizeUpdate(req.body), handleArrays));
 
     const savedGroup = await group.save();
     const response = await Group.toJSONCleanChat(savedGroup, user);
@@ -565,10 +577,11 @@ api.joinGroup = {
     if (!group) throw new NotFound(res.t('groupNotFound'));
 
     let isUserInvited = false;
+    const seekingParty = Boolean(user.party.seeking);
 
     if (group.type === 'party') {
       // Check if was invited to party
-      const inviterParty = _.find(user.invitations.parties, { id: group._id });
+      const inviterParty = find(user.invitations.parties, { id: group._id });
       if (inviterParty) {
         // Check if the user is already a member of the party or not. Only make the user leave the
         // party if the user is not a member of the party. See #12291 for more details.
@@ -587,9 +600,10 @@ api.joinGroup = {
             if (userPreviousParty) await userPreviousParty.leave(user);
           }
         }
-        // Clear all invitations of new user
+        // Clear all invitations of new user and reset looking for party state
         user.invitations.parties = [];
         user.invitations.party = {};
+        user.party.seeking = undefined;
 
         // invite new user to pending quest
         if (group.quest.key && !group.quest.active) {
@@ -608,7 +622,6 @@ api.joinGroup = {
 
       if (hasInvitation) {
         isUserInvited = true;
-        inviter = hasInvitation.inviter;
       } else {
         isUserInvited = group.privacy !== 'private';
       }
@@ -632,92 +645,77 @@ api.joinGroup = {
       group.leader = user._id; // If new user is only member -> set as leader
     }
 
+    let promises = [user.save()];
+
     if (group.type === 'party') {
       // For parties we count the number of members from the database to get the correct value.
       // See #12275 on why this is necessary and only done for parties.
-      const currentMembers = await group.getMemberCount();
-      group.memberCount = currentMembers + 1;
-    } else {
-      group.memberCount += 1;
-    }
+      const currentMembers = await group.getMemberCount({ excludeUserId: user._id });
+      // Load the inviter
+      if (inviter) inviter = await User.findById(inviter).exec();
 
-    let promises = [group.save(), user.save()];
-
-    // Load the inviter
-    if (inviter) inviter = await User.findById(inviter).exec();
-
-    // Check the inviter again, could be a deleted account
-    if (inviter) {
-      const data = {
-        headerText: common.i18n.t('invitationAcceptedHeader', inviter.preferences.language),
-        bodyText: common.i18n.t('invitationAcceptedBody', {
-          groupName: group.name,
-          username: user.profile.name,
-        }, inviter.preferences.language),
-      };
-      inviter.addNotification('GROUP_INVITE_ACCEPTED', data);
-
-      // Reward Inviter
-      if (group.type === 'party') {
+      // Check the inviter again, could be a deleted account
+      if (inviter) {
+        // Reward Inviter
         if (!inviter.items.quests.basilist) {
           inviter.items.quests.basilist = 0;
         }
         inviter.items.quests.basilist += 1;
         inviter.markModified('items.quests');
+        promises.push(inviter.save());
       }
-    }
+      group.memberCount = currentMembers + 1;
 
-    if (group.type === 'party' && inviter) {
+      // Handle awarding party-related achievements
       if (group.memberCount > 1) {
         const notification = new UserNotification({ type: 'ACHIEVEMENT_PARTY_UP' });
 
-        promises.push(User.update(
+        promises.push(User.updateMany(
           {
             $or: [{ 'party._id': group._id }, { _id: user._id }],
             'achievements.partyUp': { $ne: true },
-            _id: { $ne: inviter._id },
           },
           {
             $set: { 'achievements.partyUp': true },
             $push: { notifications: notification.toObject() },
           },
-          { multi: true },
         ).exec());
-
-        if (inviter) {
-          if (inviter.achievements.partyUp !== true) {
-            inviter.achievements.partyUp = true;
-            inviter.addNotification('ACHIEVEMENT_PARTY_UP');
-          }
-        }
       }
 
       if (group.memberCount > 3) {
         const notification = new UserNotification({ type: 'ACHIEVEMENT_PARTY_ON' });
 
-        promises.push(User.update(
+        promises.push(User.updateMany(
           {
             $or: [{ 'party._id': group._id }, { _id: user._id }],
             'achievements.partyOn': { $ne: true },
-            _id: { $ne: inviter._id },
           },
           {
             $set: { 'achievements.partyOn': true },
             $push: { notifications: notification.toObject() },
           },
-          { multi: true },
         ).exec());
-
-        if (inviter) {
-          if (inviter.achievements.partyOn !== true) {
-            inviter.achievements.partyOn = true;
-            inviter.addNotification('ACHIEVEMENT_PARTY_ON');
-          }
-        }
       }
+    } else {
+      group.memberCount += 1;
     }
 
-    if (inviter) promises.push(inviter.save());
+    promises.push(group.save());
+
+    const analyticsObject = {
+      user: pick(user, ['preferences', 'registeredThrough']),
+      uuid: user._id,
+      hitType: 'event',
+      category: 'behavior',
+      owner: false,
+      groupId: group._id,
+      groupType: group.type,
+      privacy: group.privacy,
+      headers: req.headers,
+      invited: isUserInvited,
+      seekingParty: group.type === 'party' ? seekingParty : null,
+    };
+
     promises = await Promise.all(promises);
 
     if (group.hasNotCancelled()) {
@@ -725,25 +723,10 @@ api.joinGroup = {
       await group.updateGroupPlan();
     }
 
-    const response = await Group.toJSONCleanChat(promises[0], user);
+    const response = await Group.toJSONCleanChat(group, user);
     const leader = await User.findById(response.leader).select(nameFields).exec();
     if (leader) {
       response.leader = leader.toJSON({ minimize: true });
-    }
-
-    const analyticsObject = {
-      uuid: user._id,
-      hitType: 'event',
-      category: 'behavior',
-      owner: false,
-      groupType: group.type,
-      privacy: group.privacy,
-      headers: req.headers,
-      invited: isUserInvited,
-    };
-
-    if (group.privacy === 'public') {
-      analyticsObject.groupName = group.name;
     }
 
     res.analytics.track('join group', analyticsObject);
@@ -806,21 +789,6 @@ api.rejectGroupInvite = {
   },
 };
 
-function _removeMessagesFromMember (member, groupId) {
-  if (member.newMessages[groupId]) {
-    delete member.newMessages[groupId];
-    member.markModified('newMessages');
-  }
-
-  member.notifications = member.notifications.filter(n => {
-    if (n && n.type === 'NEW_CHAT_MESSAGE' && n.data && n.data.group && n.data.group.id === groupId) {
-      return false;
-    }
-
-    return true;
-  });
-}
-
 /**
  * @api {post} /api/v3/groups/:groupId/leave Leave a group
  * @apiName LeaveGroup
@@ -870,32 +838,13 @@ api.leaveGroup = {
     if (validationErrors) throw validationErrors;
 
     const { groupId } = req.params;
-    const group = await Group.getGroup({
-      user, groupId, fields: '-chat', requireMembership: true,
+    await leaveGroup({
+      res,
+      user,
+      groupId,
+      keep: req.query.keep,
+      keepChallenges: req.body.keepChallenges,
     });
-    if (!group) {
-      throw new NotFound(res.t('groupNotFound'));
-    }
-
-    // During quests, check if user can leave
-    if (group.type === 'party') {
-      if (group.quest && group.quest.leader === user._id) {
-        throw new NotAuthorized(res.t('questLeaderCannotLeaveGroup'));
-      }
-
-      if (
-        group.quest && group.quest.active
-        && group.quest.members && group.quest.members[user._id]
-      ) {
-        throw new NotAuthorized(res.t('cannotLeaveWhileActiveQuest'));
-      }
-    }
-
-    await group.leave(user, req.query.keep, req.body.keepChallenges);
-    _removeMessagesFromMember(user, group._id);
-    await user.save();
-
-    if (group.hasNotCancelled()) await group.updateGroupPlan(true);
     res.respond(200, {});
   },
 };
@@ -980,9 +929,9 @@ api.removeGroupMember = {
     }
 
     let isInvited;
-    if (_.find(member.invitations.parties, { id: group._id })) {
+    if (find(member.invitations.parties, { id: group._id })) {
       isInvited = 'party';
-    } else if (_.findIndex(member.invitations.guilds, { id: group._id }) !== -1) {
+    } else if (findIndex(member.invitations.guilds, { id: group._id }) !== -1) {
       isInvited = 'guild';
     }
 
@@ -1011,7 +960,7 @@ api.removeGroupMember = {
         member.party._id = undefined; // TODO remove quest information too? Use group.leave()?
       }
 
-      _removeMessagesFromMember(member, group._id);
+      removeMessagesFromMember(member, group._id);
 
       if (group.quest && group.quest.active && group.quest.leader === member._id) {
         member.items.quests[group.quest.key] += 1;
@@ -1148,11 +1097,9 @@ api.removeGroupMember = {
 api.inviteToGroup = {
   method: 'POST',
   url: '/groups/:groupId/invite',
-  middlewares: [authWithHeaders()],
+  middlewares: [authWithHeaders(), chatPrivilegesRequired()],
   async handler (req, res) {
     const { user } = res.locals;
-
-    if (user.flags.chatRevoked) throw new NotAuthorized(res.t('chatPrivilegesRevoked'));
 
     req.checkParams('groupId', apiError('groupIdRequired')).notEmpty();
 
@@ -1180,36 +1127,42 @@ api.inviteToGroup = {
 
     const results = [];
 
-    if (uuids) {
-      const uuidInvites = uuids.map(uuid => inviteByUUID(uuid, group, user, req, res));
-      const uuidResults = await Promise.all(uuidInvites);
-      results.push(...uuidResults);
+    if (!user.flags.chatShadowMuted) {
+      if (uuids) {
+        const uuidInvites = uuids.map(uuid => inviteByUUID(uuid, group, user, req, res));
+        const uuidResults = await Promise.all(uuidInvites);
+        results.push(...uuidResults);
+      }
+
+      if (emails) {
+        const emailInvites = emails.map(invite => inviteByEmail(invite, group, user, req, res));
+        user.invitesSent += emails.length;
+        await user.save();
+        const emailResults = await Promise.all(emailInvites);
+        results.push(...emailResults);
+      }
+
+      if (usernames) {
+        const usernameInvites = usernames
+          .map(username => inviteByUserName(username, group, user, req, res));
+        const usernameResults = await Promise.all(usernameInvites);
+        results.push(...usernameResults);
+      }
+    } else {
+      const fakeCount = (uuids ? uuids.length : 0)
+        + (emails ? emails.length : 0)
+        + (usernames ? usernames.length : 0);
+      results.push(...new Array(fakeCount).fill({
+        id: group._id,
+        _id: group._id,
+        name: group.name,
+        inviter: user._id,
+      }));
+      if (emails) {
+        user.invitesSent += emails.length;
+        await user.save();
+      }
     }
-
-    if (emails) {
-      const emailInvites = emails.map(invite => inviteByEmail(invite, group, user, req, res));
-      user.invitesSent += emails.length;
-      await user.save();
-      const emailResults = await Promise.all(emailInvites);
-      results.push(...emailResults);
-    }
-
-    if (usernames) {
-      const usernameInvites = usernames
-        .map(username => inviteByUserName(username, group, user, req, res));
-      const usernameResults = await Promise.all(usernameInvites);
-      results.push(...usernameResults);
-    }
-
-    const analyticsObject = {
-      uuid: user._id,
-      hitType: 'event',
-      category: 'behavior',
-      groupType: group.type,
-      headers: req.headers,
-    };
-
-    res.analytics.track('group invite', analyticsObject);
 
     res.respond(200, results);
   },
@@ -1339,11 +1292,16 @@ api.removeGroupManager = {
 api.getGroupPlans = {
   method: 'GET',
   url: '/group-plans',
-  middlewares: [authWithHeaders()],
+  middlewares: [authWithHeaders({ userFieldsToInclude: ['guilds', 'party._id'] })],
   async handler (req, res) {
     const { user } = res.locals;
 
     const userGroups = user.getGroups();
+
+    if (userGroups.length === 0) {
+      res.respond(200, []);
+      return;
+    }
 
     const groups = await Group
       .find({
@@ -1355,6 +1313,90 @@ api.getGroupPlans = {
     const groupPlans = groups.filter(group => group.hasActiveGroupPlan());
 
     res.respond(200, groupPlans);
+  },
+};
+
+/**
+ * @api {get} /api/v3/looking-for-party Get users in search of parties
+ * @apiName GetLookingForParty
+ * @apiGroup Group
+ *
+ * @apiParam (Query) {Number} [page] Page number, defaults to 0
+ *
+ * @apiSuccess {Object[]} data An array of users looking for a party
+ *
+ * @apiError (400) {BadRequest} notPartyLeader You are not the leader of a Party.
+ */
+api.getLookingForParty = {
+  method: 'GET',
+  url: '/looking-for-party',
+  middlewares: [authWithHeaders()],
+  async handler (req, res) {
+    const USERS_PER_PAGE = 30;
+    const { user } = res.locals;
+
+    req.checkQuery('page').optional().isInt({ min: 0 }, apiError('queryPageInteger'));
+    const PAGE = req.query.page || 0;
+    const PAGE_START = USERS_PER_PAGE * PAGE;
+
+    let partyLed = false;
+    if (user.party._id) {
+      const party = await Group.getGroup({ user, groupId: user.party._id });
+      if (party && party.leader === user._id) {
+        partyLed = true;
+      }
+    }
+
+    if (!partyLed) {
+      throw new BadRequest(apiError('notPartyLeader'));
+    }
+
+    const seekers = await User
+      .find({
+        'party.seeking': { $exists: true },
+        'invitations.party.id': { $exists: false },
+        'auth.timestamps.loggedin': {
+          $gt: moment().subtract(7, 'days').toDate(),
+        },
+      })
+      // eslint-disable-next-line no-multi-str
+      .select('_id auth.blocked auth.local.username auth.timestamps backer contributor.level \
+        flags.chatRevoked flags.classSelected inbox.blocks invitations.party items.gear.costume \
+        items.gear.equipped loginIncentives party._id preferences.background preferences.chair \
+        preferences.costume preferences.hair preferences.shirt preferences.size preferences.skin \
+        preferences.language profile.name stats.buffs stats.class stats.lvl')
+      .sort('-auth.timestamps.loggedin')
+      .exec();
+
+    const filteredSeekers = seekers.filter(seeker => {
+      if (seeker.party._id) return false;
+      if (seeker.flags.chatRevoked) return false;
+      if (seeker.auth.blocked) return false;
+      if (seeker.inbox.blocks.indexOf(user._id) !== -1) return false;
+      if (user.inbox.blocks.indexOf(seeker._id) !== -1) return false;
+      return true;
+    }).slice(PAGE_START, PAGE_START + USERS_PER_PAGE);
+
+    const cleanedSeekers = filteredSeekers.map(seeker => ({
+      _id: seeker._id,
+      auth: {
+        local: {
+          username: seeker.auth.local.username,
+        },
+        timestamps: seeker.auth.timestamps,
+      },
+      backer: seeker.backer,
+      contributor: seeker.contributor,
+      flags: seeker.flags,
+      invited: false,
+      items: seeker.items,
+      loginIncentives: seeker.loginIncentives,
+      preferences: seeker.preferences,
+      profile: seeker.profile,
+      stats: seeker.stats,
+    }));
+
+    res.respond(200, cleanedSeekers);
   },
 };
 

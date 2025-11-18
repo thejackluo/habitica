@@ -1,6 +1,13 @@
 name: Test
 
-on: [push, pull_request]
+on:
+  push:
+    branches-ignore:
+    - 'phillip/**'
+    - 'sabrecat/**'
+    - 'kalista/**'
+    - 'natalie/**'
+  pull_request:
 
 permissions:
   contents: read
@@ -10,19 +17,21 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        node-version: [14.x]
+        node-version: [21.x]
     steps:
-    - uses: actions/checkout@v1
+    - uses: actions/checkout@v4
       with:
         fetch-depth: 1
     - name: Use Node.js ${{ matrix.node-version }}
-      uses: actions/setup-node@v1
+      uses: actions/setup-node@v4
       with:
         node-version: ${{ matrix.node-version }}
+    - run: sudo apt update
+    - run: sudo apt -y install libkrb5-dev
     - run: cp config.json.example config.json
     - name: npm install
       run: |
-        npm ci
+        npm i
       env:
         CI: true
         NODE_ENV: test
@@ -31,19 +40,21 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        node-version: [14.x]
+        node-version: [21.x]
     steps:
-    - uses: actions/checkout@v1
+    - uses: actions/checkout@v4
       with:
         fetch-depth: 1
     - name: Use Node.js ${{ matrix.node-version }}
-      uses: actions/setup-node@v1
+      uses: actions/setup-node@v4
       with:
         node-version: ${{ matrix.node-version }}
+    - run: sudo apt update
+    - run: sudo apt -y install libkrb5-dev
     - run: cp config.json.example config.json
     - name: npm install
       run: |
-        npm ci
+        npm i
       env:
         CI: true
         NODE_ENV: test
@@ -52,19 +63,21 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        node-version: [14.x]
+        node-version: [21.x]
     steps:
-    - uses: actions/checkout@v1
+    - uses: actions/checkout@v4
       with:
         fetch-depth: 1
     - name: Use Node.js ${{ matrix.node-version }}
-      uses: actions/setup-node@v1
+      uses: actions/setup-node@v4
       with:
         node-version: ${{ matrix.node-version }}
+    - run: sudo apt update
+    - run: sudo apt -y install libkrb5-dev
     - run: cp config.json.example config.json
     - name: npm install
       run: |
-        npm ci
+        npm i
       env:
         CI: true
         NODE_ENV: test
@@ -74,19 +87,21 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        node-version: [14.x]
+        node-version: [21.x]
     steps:
-    - uses: actions/checkout@v1
+    - uses: actions/checkout@v4
       with:
         fetch-depth: 1
     - name: Use Node.js ${{ matrix.node-version }}
-      uses: actions/setup-node@v1
+      uses: actions/setup-node@v4
       with:
         node-version: ${{ matrix.node-version }}
+    - run: sudo apt update
+    - run: sudo apt -y install libkrb5-dev
     - run: cp config.json.example config.json
     - name: npm install
       run: |
-        npm ci
+        npm i
       env:
         CI: true
         NODE_ENV: test
@@ -95,19 +110,21 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        node-version: [14.x]
+        node-version: [21.x]
     steps:
-    - uses: actions/checkout@v1
+    - uses: actions/checkout@v4
       with:
         fetch-depth: 1
     - name: Use Node.js ${{ matrix.node-version }}
-      uses: actions/setup-node@v1
+      uses: actions/setup-node@v4
       with:
         node-version: ${{ matrix.node-version }}
+    - run: sudo apt update
+    - run: sudo apt -y install libkrb5-dev
     - run: cp config.json.example config.json
     - name: npm install
       run: |
-        npm ci
+        npm i
       env:
         CI: true
         NODE_ENV: test
@@ -117,14 +134,14 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        node-version: [14.x]
+        node-version: [21.x]
         mongodb-version: [4.2]
     steps:
-    - uses: actions/checkout@v1
+    - uses: actions/checkout@v4
       with:
         fetch-depth: 1
     - name: Use Node.js ${{ matrix.node-version }}
-      uses: actions/setup-node@v1
+      uses: actions/setup-node@v4
       with:
         node-version: ${{ matrix.node-version }}
     - name: Start MongoDB ${{ matrix.mongodb-version }} Replica Set
@@ -132,10 +149,12 @@ jobs:
       with:
         mongodb-version: ${{ matrix.mongodb-version }}
         mongodb-replica-set: rs
+    - run: sudo apt update
+    - run: sudo apt -y install libkrb5-dev
     - run: cp config.json.example config.json
     - name: npm install
       run: |
-        npm ci
+        npm i
       env:
         CI: true
         NODE_ENV: test
@@ -146,14 +165,14 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        node-version: [14.x]
+        node-version: [21.x]
         mongodb-version: [4.2]
     steps:
-    - uses: actions/checkout@v1
+    - uses: actions/checkout@v4
       with:
         fetch-depth: 1
     - name: Use Node.js ${{ matrix.node-version }}
-      uses: actions/setup-node@v1
+      uses: actions/setup-node@v4
       with:
         node-version: ${{ matrix.node-version }}
     - name: Start MongoDB ${{ matrix.mongodb-version }} Replica Set
@@ -161,10 +180,12 @@ jobs:
       with:
         mongodb-version: ${{ matrix.mongodb-version }}
         mongodb-replica-set: rs
+    - run: sudo apt update
+    - run: sudo apt -y install libkrb5-dev
     - run: cp config.json.example config.json
     - name: npm install
       run: |
-        npm ci
+        npm i
       env:
         CI: true
         NODE_ENV: test
@@ -175,14 +196,14 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        node-version: [14.x]
+        node-version: [21.x]
         mongodb-version: [4.2]
     steps:
-    - uses: actions/checkout@v1
+    - uses: actions/checkout@v4
       with:
         fetch-depth: 1
     - name: Use Node.js ${{ matrix.node-version }}
-      uses: actions/setup-node@v1
+      uses: actions/setup-node@v4
       with:
         node-version: ${{ matrix.node-version }}
     - name: Start MongoDB ${{ matrix.mongodb-version }} Replica Set
@@ -190,10 +211,12 @@ jobs:
       with:
         mongodb-version: ${{ matrix.mongodb-version }}
         mongodb-replica-set: rs
+    - run: sudo apt update
+    - run: sudo apt -y install libkrb5-dev
     - run: cp config.json.example config.json
     - name: npm install
       run: |
-        npm ci
+        npm i
       env:
         CI: true
         NODE_ENV: test
@@ -205,19 +228,21 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        node-version: [14.x]
+        node-version: [21.x]
     steps:
-    - uses: actions/checkout@v1
+    - uses: actions/checkout@v4
       with:
         fetch-depth: 1
     - name: Use Node.js ${{ matrix.node-version }}
-      uses: actions/setup-node@v1
+      uses: actions/setup-node@v4
       with:
         node-version: ${{ matrix.node-version }}
+    - run: sudo apt update
+    - run: sudo apt -y install libkrb5-dev
     - run: cp config.json.example config.json
     - name: npm install
       run: |
-        npm ci
+        npm i
       env:
         CI: true
         NODE_ENV: test
@@ -228,15 +253,17 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        node-version: [14.x]
+        node-version: [21.x]
     steps:
-    - uses: actions/checkout@v1
+    - uses: actions/checkout@v4
       with:
         fetch-depth: 1
     - name: Use Node.js ${{ matrix.node-version }}
-      uses: actions/setup-node@v1
+      uses: actions/setup-node@v4
       with:
         node-version: ${{ matrix.node-version }}
+    - run: sudo apt update
+    - run: sudo apt -y install libkrb5-dev
     - run: cp config.json.example config.json
     - name: npm install
       run: |

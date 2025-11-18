@@ -2,7 +2,6 @@ import filter from 'lodash/filter';
 import isEmpty from 'lodash/isEmpty';
 import pick from 'lodash/pick';
 import content from '../../content/index';
-import * as count from '../../count';
 import splitWhitespace from '../../libs/splitWhitespace';
 import {
   NotAuthorized,
@@ -70,11 +69,12 @@ export class BuyArmoireOperation extends AbstractGoldItemOperation { // eslint-d
     ];
   }
 
-  _trackDropAnalytics (userId, key) {
+  _trackDropAnalytics (user, key) {
     this.analytics.track(
       'Enchanted Armoire',
       {
-        uuid: userId,
+        user: pick(user, ['preferences', 'registeredThrough']),
+        uuid: user._id,
         itemKey: key,
         category: 'behavior',
         headers: this.req.headers,
@@ -83,6 +83,7 @@ export class BuyArmoireOperation extends AbstractGoldItemOperation { // eslint-d
   }
 
   _gearResult (user, eligibleEquipment) {
+    const emptied = eligibleEquipment.length === 1;
     eligibleEquipment.sort();
     const drop = randomVal(eligibleEquipment);
 
@@ -102,20 +103,17 @@ export class BuyArmoireOperation extends AbstractGoldItemOperation { // eslint-d
       dropText: drop.text(this.req.language),
     });
 
-    if (count.remainingGearInSet(user.items.gear.owned, 'armoire') === 0) {
-      user.flags.armoireEmpty = true;
-    }
-
     removeItemByPath(user, `gear.flat.${drop.key}`);
 
     if (this.analytics) {
-      this._trackDropAnalytics(user._id, drop.key);
+      this._trackDropAnalytics(user, drop.key);
     }
 
     const armoireResp = {
       type: 'gear',
       dropKey: drop.key,
       dropText: drop.text(this.req.language),
+      emptied,
     };
 
     return {
@@ -137,9 +135,8 @@ export class BuyArmoireOperation extends AbstractGoldItemOperation { // eslint-d
     if (user.markModified) user.markModified('items.food');
 
     if (this.analytics) {
-      this._trackDropAnalytics(user._id, drop.key);
+      this._trackDropAnalytics(user, drop.key);
     }
-
     return {
       message: this.i18n('armoireFood', {
         image: `<span class="Pet_Food_${drop.key} pull-left"></span>`,

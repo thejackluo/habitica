@@ -312,7 +312,7 @@ label.custom-control-label(v-once) {{ $t('allowGuildInvitationsFromNonMembers') 
 </template>
 
 <style lang="scss" scoped>
-  @import '~@/assets/scss/colors.scss';
+  @import '@/assets/scss/colors.scss';
 
   .custom-control-input {
     z-index: 1 !important;
@@ -372,14 +372,14 @@ label.custom-control-label(v-once) {{ $t('allowGuildInvitationsFromNonMembers') 
 </style>
 
 <script>
+import { MAX_SUMMARY_SIZE_FOR_GUILDS } from '@/../../common/script/constants';
+import CategoryOptions from '@/../../common/script/content/categoryOptions';
 import toggleSwitch from '@/components/ui/toggleSwitch';
 import markdownDirective from '@/directives/markdown';
-import gemIcon from '@/assets/svg/gem.svg';
-import informationIcon from '@/assets/svg/information.svg';
+import gemIcon from '@/assets/svg/gem.svg?raw';
+import informationIcon from '@/assets/svg/information.svg?raw';
 
-import { MAX_SUMMARY_SIZE_FOR_GUILDS } from '@/../../common/script/constants';
 import { userStateMixin } from '../../mixins/userState';
-import CategoryOptions from '@/../../common/script/content/categoryOptions';
 
 // @TODO: Not sure the best way to pass party creating status
 // Since we need the modal in the header, passing props doesn't work

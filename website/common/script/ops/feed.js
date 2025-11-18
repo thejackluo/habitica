@@ -2,6 +2,7 @@ import forEach from 'lodash/forEach';
 import findIndex from 'lodash/findIndex';
 import get from 'lodash/get';
 import keys from 'lodash/keys';
+import pick from 'lodash/pick';
 import upperFirst from 'lodash/upperFirst';
 import moment from 'moment';
 import i18n from '../i18n';
@@ -11,7 +12,7 @@ import {
   NotAuthorized,
   NotFound,
 } from '../libs/errors';
-import errorMessage from '../libs/errorMessage';
+import { errorMessage } from '../libs/errorMessage';
 import { checkOnboardingStatus } from '../libs/onboarding';
 
 function evolve (user, pet, req) {
@@ -142,6 +143,7 @@ export default function feed (user, req = {}, analytics) {
 
   if (analytics && moment().diff(user.auth.timestamps.created, 'days') < 7) {
     analytics.track('pet feed', {
+      user: pick(user, ['preferences', 'registeredThrough']),
       uuid: user._id,
       foodKey: food.key,
       petKey: pet.key,

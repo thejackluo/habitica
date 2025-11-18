@@ -3,6 +3,7 @@ import cloneDeep from 'lodash/cloneDeep';
 import compact from 'lodash/compact';
 import forEach from 'lodash/forEach';
 import keys from 'lodash/keys';
+import pick from 'lodash/pick';
 import remove from 'lodash/remove';
 import validator from 'validator';
 import {
@@ -14,7 +15,7 @@ import { model as Challenge } from '../../models/challenge';
 import { model as Group } from '../../models/group';
 import { model as User } from '../../models/user';
 import * as Tasks from '../../models/task';
-import apiError from '../apiError';
+import { apiError } from '../apiError';
 import {
   BadRequest,
   NotFound,
@@ -114,7 +115,7 @@ async function createTasks (req, res, options = {}) {
     };
   }
 
-  await owner.update(taskOrderUpdateQuery).exec();
+  await owner.updateOne(taskOrderUpdateQuery).exec();
 
   // tasks with aliases need to be validated asynchronously
   await validateTaskAlias(toSave, res);
@@ -207,11 +208,7 @@ async function getTasks (req, res, options = {}) {
       query.type = 'todo';
       query.completed = false; // Exclude completed todos
     } else if (type === 'completedTodos' || type === '_allCompletedTodos') { // _allCompletedTodos is currently in BETA and is likely to be removed in future
-      limit = 30;
-
-      if (type === '_allCompletedTodos') {
-        limit = 0; // no limit
-      }
+      limit = 0; // no limit, the 30/90 days of data for subscribers is handled during cron
 
       query.type = 'todo';
       query.completed = true;
@@ -237,7 +234,7 @@ async function getTasks (req, res, options = {}) {
     } else {
       query.type = type.slice(0, -1); // removing the final "s"
     }
-  } else {
+  } else if (!challenge) {
     query.$and = [{
       $or: [ // Exclude completed todos
         { type: 'todo', completed: false },
@@ -250,8 +247,15 @@ async function getTasks (req, res, options = {}) {
   if (limit) mQuery.limit(limit);
   if (sort) mQuery.sort(sort);
 
-  const tasks = await mQuery.exec();
+  const tasks = await mQuery.lean().exec();
 
+  // Ensure we always include the "id" variant of "_id", and not the version counter
+  tasks.forEach(task => {
+    task.id = task._id;
+    delete task.__v;
+  });
+
+  // Calculate due dates for Dailies
   if (dueDate) {
     tasks.forEach(task => {
       setNextDue(task, user, dueDate);
@@ -512,6 +516,7 @@ async function scoreTask (user, task, direction, req, res) {
       role = 'member';
     }
     res.analytics.track('team task scored', {
+      user: pick(user, ['preferences', 'registeredThrough']),
       uuid: user._id,
       hitType: 'event',
       category: 'behavior',

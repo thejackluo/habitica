@@ -2,7 +2,7 @@
   <div class="sidebar px-4">
     <div>
       <div class="buttons-wrapper">
-        <div class="button-container button-with-menu-row">
+        <div class="button-container d-flex">
           <button
             v-if="!isMember"
             class="btn btn-success btn-success"
@@ -23,7 +23,7 @@
             class="ml-2"
             :no-caret="true"
           >
-            <template v-slot:button-content>
+            <template #button-content>
               <span
                 v-once
                 class="svg-icon inline menuIcon"
@@ -143,12 +143,12 @@ import questSidebarSection from '@/components/groups/questSidebarSection';
 import sidebarSection from '@/components/sidebarSection';
 import markdownDirective from '@/directives/markdown';
 
-import menuIcon from '@/assets/svg/menu.svg';
-import sparklesIcon from '@/assets/svg/sparklesIcon.svg';
-import leaveIcon from '@/assets/svg/leave.svg';
-import editIcon from '@/assets/svg/edit.svg';
-import messageIcon from '@/assets/svg/message.svg';
-import usersIcon from '@/assets/svg/users.svg';
+import menuIcon from '@/assets/svg/menu.svg?raw';
+import sparklesIcon from '@/assets/svg/sparklesIcon.svg?raw';
+import leaveIcon from '@/assets/svg/leave.svg?raw';
+import editIcon from '@/assets/svg/edit.svg?raw';
+import messageIcon from '@/assets/svg/message.svg?raw';
+import usersIcon from '@/assets/svg/users.svg?raw';
 
 export default {
   components: {
@@ -181,7 +181,7 @@ export default {
 </script>
 
 <style lang="scss" scoped>
-  @import '~@/assets/scss/colors.scss';
+  @import '@/assets/scss/colors.scss';
 
   @media (min-width: 1300px) {
     .sidebar {
@@ -201,10 +201,6 @@ export default {
     button {
       width: 100%;
     }
-  }
-
-  .button-with-menu-row {
-    display: flex;
   }
 
   .menuIcon {

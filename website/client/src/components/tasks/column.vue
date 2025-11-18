@@ -86,8 +86,8 @@
         v-if="taskList.length > 0"
         ref="tasksList"
         class="sortable-tasks"
-        :options="{disabled: activeFilter.label === 'scheduled' || !canBeDragged(),
-                   scrollSensitivity: 64}"
+        :disabled="activeFilter.label === 'scheduled' || !canBeDragged()"
+        scrollSensitivity="64"
         :delay-on-touch-only="true"
         :delay="100"
         @update="taskSorted"
@@ -147,7 +147,7 @@
 </template>
 
 <style lang="scss" scoped>
-  @import '~@/assets/scss/colors.scss';
+  @import '@/assets/scss/colors.scss';
 
   ::v-deep .draggable-cursor {
     cursor: grabbing;
@@ -355,6 +355,7 @@ import Task from './task';
 import ClearCompletedTodos from './clearCompletedTodos';
 import buyMixin from '@/mixins/buy';
 import sync from '@/mixins/sync';
+import externalLinks from '@/mixins/externalLinks';
 import { mapState, mapActions, mapGetters } from '@/libs/store';
 import shopItem from '../shops/shopItem';
 import BuyQuestModal from '@/components/shops/quests/buyQuestModal.vue';
@@ -369,10 +370,10 @@ import {
   sortAndFilterTasks,
 } from '@/libs/store/helpers/filterTasks';
 
-import habitIcon from '@/assets/svg/habit.svg';
-import dailyIcon from '@/assets/svg/daily.svg';
-import todoIcon from '@/assets/svg/todo.svg';
-import rewardIcon from '@/assets/svg/reward.svg';
+import habitIcon from '@/assets/svg/habit.svg?raw';
+import dailyIcon from '@/assets/svg/daily.svg?raw';
+import todoIcon from '@/assets/svg/todo.svg?raw';
+import rewardIcon from '@/assets/svg/reward.svg?raw';
 import { EVENTS } from '@/libs/events';
 
 export default {
@@ -384,7 +385,7 @@ export default {
     shopItem,
     draggable,
   },
-  mixins: [buyMixin, notifications, sync],
+  mixins: [buyMixin, notifications, sync, externalLinks],
   // @TODO Set default values for props
   // allows for better control of props values
   // allows for better control of where this component is called
@@ -520,7 +521,12 @@ export default {
     // Get Category Filter Labels
     this.typeFilters = getFilterLabels(this.type, this.challenge);
     // Set default filter for task column
-    this.activateFilter(this.type);
+
+    if (this.challenge) {
+      this.activateFilter(this.type);
+    } else {
+      this.activateFilter(this.type, this.user.preferences.tasks.activeFilter[this.type], true);
+    }
   },
   mounted () {
     this.setColumnBackgroundVisibility();
@@ -534,6 +540,10 @@ export default {
       if (this.activeFilter.label !== 'complete2') return;
       this.loadCompletedTodos();
     });
+    this.handleExternalLinks();
+  },
+  updated () {
+    this.handleExternalLinks();
   },
   beforeDestroy () {
     this.$root.$off('buyModal::boughtItem');
@@ -656,7 +666,7 @@ export default {
     taskSummary (task) {
       this.$emit('taskSummary', task);
     },
-    activateFilter (type, filter = '') {
+    activateFilter (type, filter = '', skipSave = false) {
       // Needs a separate API call as this data may not reside in store
       if (type === 'todo' && filter === 'complete2') {
         if (this.group && this.group._id) {
@@ -674,22 +684,26 @@ export default {
       // loads and not on subsequent reloads.
       if (
         type === 'daily' && filter === '' && !this.challenge
-        && this.user.preferences.dailyDueDefaultView
       ) {
         filter = 'due'; // eslint-disable-line no-param-reassign
       }
 
       this.activeFilter = getActiveFilter(type, filter, this.challenge);
+
+      if (!skipSave && !this.challenge) {
+        const propertyToUpdate = `preferences.tasks.activeFilter.${type}`;
+        this.$store.dispatch('user:set', { [propertyToUpdate]: filter });
+      }
     },
     setColumnBackgroundVisibility () {
       this.$nextTick(() => {
-        if (!this.$refs.columnBackground || !this.$refs.tasksList) return;
+        if (!this.$refs.columnBackground) return;
 
         const tasksWrapperEl = this.$refs.tasksWrapper;
 
         const tasksWrapperHeight = tasksWrapperEl.offsetHeight;
         const quickAddHeight = this.$refs.quickAdd ? this.$refs.quickAdd.offsetHeight : 0;
-        const tasksListHeight = this.$refs.tasksList.$el.offsetHeight;
+        const tasksListHeight = this.$refs.tasksList ? this.$refs.tasksList.$el.offsetHeight : 0;
 
         let combinedTasksHeights = tasksListHeight + quickAddHeight;
 

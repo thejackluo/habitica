@@ -1,4 +1,7 @@
-import _ from 'lodash';
+import cloneDeep from 'lodash/cloneDeep';
+import forEach from 'lodash/forEach';
+import isFunction from 'lodash/isFunction';
+import pick from 'lodash/pick';
 import nconf from 'nconf';
 import get from 'lodash/get';
 import { authWithHeaders } from '../../middlewares/auth';
@@ -22,7 +25,9 @@ import {
 } from '../../libs/email';
 import * as inboxLib from '../../libs/inbox';
 import * as userLib from '../../libs/user';
+import { model as UserHistory } from '../../models/userHistory';
 
+const OFFICIAL_PLATFORMS = ['habitica-web', 'habitica-ios', 'habitica-android'];
 const TECH_ASSISTANCE_EMAIL = nconf.get('EMAILS_TECH_ASSISTANCE_EMAIL');
 const DELETE_CONFIRMATION = 'DELETE';
 
@@ -122,13 +127,13 @@ api.getBuyList = {
   middlewares: [authWithHeaders()],
   url: '/user/inventory/buy',
   async handler (req, res) {
-    const list = _.cloneDeep(common.updateStore(res.locals.user));
+    const list = cloneDeep(common.updateStore(res.locals.user));
 
     // return text and notes strings
-    _.each(list, item => {
-      _.each(item, (itemPropVal, itemPropKey) => {
+    forEach(list, item => {
+      forEach(item, (itemPropVal, itemPropKey) => {
         if (
-          _.isFunction(itemPropVal)
+          isFunction(itemPropVal)
           && itemPropVal.i18nLangFunc
         ) item[itemPropKey] = itemPropVal(req.language);
       });
@@ -167,16 +172,16 @@ api.getBuyList = {
  */
 api.getInAppRewardsList = {
   method: 'GET',
-  middlewares: [authWithHeaders()],
+  middlewares: [authWithHeaders({ userFieldsToInclude: ['items', 'pinnedItems', 'unpinnedItems', 'pinnedItemsOrder', 'stats.class', 'achievements', 'purchased'] })],
   url: '/user/in-app-rewards',
   async handler (req, res) {
     const list = common.inAppRewards(res.locals.user);
 
     // return text and notes strings
-    _.each(list, item => {
-      _.each(item, (itemPropVal, itemPropKey) => {
+    forEach(list, item => {
+      forEach(item, (itemPropVal, itemPropKey) => {
         if (
-          _.isFunction(itemPropVal)
+          isFunction(itemPropVal)
           && itemPropVal.i18nLangFunc
         ) item[itemPropKey] = itemPropVal(req.language);
       });
@@ -284,7 +289,7 @@ api.deleteUser = {
       (user.auth.facebook.id || user.auth.google.id || user.auth.apple.id)
       && password !== DELETE_CONFIRMATION
     ) {
-      throw new NotAuthorized(res.t('incorrectDeletePhrase', { magicWord: 'DELETE' }));
+      throw new NotAuthorized(res.t('incorrectDeletePhrase', { magicWord: DELETE_CONFIRMATION }));
     }
 
     const { feedback } = req.body;
@@ -303,11 +308,11 @@ api.deleteUser = {
 
     await Promise.all(groupLeavePromises);
 
-    await Tasks.Task.remove({
+    await Tasks.Task.deleteMany({
       userId: user._id,
     }).exec();
 
-    await user.remove();
+    await user.deleteOne();
 
     if (feedback) {
       sendTxn({ email: TECH_ASSISTANCE_EMAIL }, 'admin-feedback', [
@@ -321,6 +326,7 @@ api.deleteUser = {
     }
 
     res.analytics.track('account delete', {
+      user: pick(user, ['preferences', 'registeredThrough']),
       uuid: user._id,
       hitType: 'event',
       category: 'behavior',
@@ -331,7 +337,7 @@ api.deleteUser = {
 };
 
 function _cleanChecklist (task) {
-  _.forEach(task.checklist, (c, i) => {
+  forEach(task.checklist, (c, i) => {
     c.text = `item ${i}`;
   });
 }
@@ -384,11 +390,11 @@ api.getUserAnonymized = {
     delete user.secret;
     delete user.permissions;
 
-    _.forEach(user.inbox.messages, msg => {
+    forEach(user.inbox.messages, msg => {
       msg.text = 'inbox message text';
     });
 
-    _.forEach(user.tags, tag => {
+    forEach(user.tags, tag => {
       tag.name = 'tag';
       tag.challenge = 'challenge';
     });
@@ -402,7 +408,7 @@ api.getUserAnonymized = {
     };
     const tasks = await Tasks.Task.find(query).exec();
 
-    _.forEach(tasks, task => {
+    forEach(tasks, task => {
       task.text = 'task text';
       task.notes = 'task notes';
       if (task.type === 'todo' || task.type === 'daily') {
@@ -494,9 +500,19 @@ api.buy = {
     let quantity = 1;
     if (req.body.quantity) quantity = req.body.quantity;
     req.quantity = quantity;
+    if (OFFICIAL_PLATFORMS.indexOf(req.headers['x-client']) === -1) {
+      res.analytics = undefined;
+    }
     const buyRes = await common.ops.buy(user, req, res.analytics);
 
     await user.save();
+
+    if (type === 'armoire') {
+      await UserHistory.beginUserHistoryUpdate(user._id, req.headers)
+        .withArmoire(buyRes[0].armoire.dropKey || 'experience')
+        .commit();
+    }
+
     res.respond(200, ...buyRes);
   },
 };
@@ -584,8 +600,14 @@ api.buyArmoire = {
     const { user } = res.locals;
     req.type = 'armoire';
     req.params.key = 'armoire';
+    if (OFFICIAL_PLATFORMS.indexOf(req.headers['x-client']) === -1) {
+      res.analytics = undefined;
+    }
     const buyArmoireResponse = await common.ops.buy(user, req, res.analytics);
     await user.save();
+    await UserHistory.beginUserHistoryUpdate(user._id, req.headers)
+      .withArmoire(buyArmoireResponse[0].armoire.dropKey || 'experience')
+      .commit();
     res.respond(200, ...buyArmoireResponse);
   },
 };
@@ -975,7 +997,7 @@ api.disableClasses = {
  * @apiGroup User
  *
  * @apiParam (Path) {String="gems","eggs","hatchingPotions","premiumHatchingPotions"
-                    ,"food","quests","gear"} type Type of item to purchase.
+                    ,"food","quests","gear","pets"} type Type of item to purchase.
  * @apiParam (Path) {String} key Item's key (use "gem" for purchasing gems)
  *
  * @apiParam (Body) {Integer} [quantity=1] Count of items to buy.
@@ -1530,7 +1552,7 @@ api.clearMessages = {
  */
 api.markPmsRead = {
   method: 'POST',
-  middlewares: [authWithHeaders()],
+  middlewares: [authWithHeaders({ userFieldsToInclude: ['inbox'] })],
   url: '/user/mark-pms-read',
   async handler (req, res) {
     const { user } = res.locals;
@@ -1765,6 +1787,28 @@ api.movePinnedItem = {
     const userJson = user.toJSON();
 
     res.respond(200, userJson.pinnedItemsOrder);
+  },
+};
+
+/**
+ * @api {post} /api/v3/user/stat-sync
+ * Request a refresh of user stats, including processing of pending level-ups
+ * @apiName StatSync
+ * @apiGroup User
+ *
+ * @apiSuccess {Object} data The user object
+ */
+
+api.statSync = {
+  method: 'POST',
+  middlewares: [authWithHeaders()],
+  url: '/user/stat-sync',
+  async handler (req, res) {
+    const { user } = res.locals;
+    common.fns.updateStats(user, user.stats);
+    await user.save();
+
+    res.respond(200, user);
   },
 };
 

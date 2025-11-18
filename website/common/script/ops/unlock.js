@@ -1,4 +1,5 @@
 import get from 'lodash/get';
+import pick from 'lodash/pick';
 import setWith from 'lodash/setWith';
 import i18n from '../i18n';
 import { NotAuthorized, BadRequest } from '../libs/errors';
@@ -7,6 +8,7 @@ import { removeItemByPath } from './pinnedGearUtils';
 import getItemInfo from '../libs/getItemInfo';
 import content from '../content/index';
 import updateUserBalance from './updateUserBalance';
+import { getScheduleMatchingGroup } from '../content/constants/schedule';
 
 const incentiveBackgrounds = ['blue', 'green', 'red', 'purple', 'yellow'];
 
@@ -35,6 +37,7 @@ function getItemByPath (path, setType) {
   if (setType === 'hair') {
     // itemPathParent is in this format: hair.purple
     const hairType = itemPathParent.split('.')[1];
+    if (!content.appearances.hair[hairType]) return null;
     return content.appearances.hair[hairType][itemKey];
   }
 
@@ -223,6 +226,13 @@ export default async function unlock (user, req = {}, analytics) {
   // The passed paths are not used anymore after this point for full sets
   const { set, items, paths } = getSet(setType, firstPath, req);
 
+  if (isBackground && !alreadyUnlocked(user, setType, path)) {
+    const matchers = getScheduleMatchingGroup('backgrounds');
+    if (!matchers.match(set.key)) {
+      throw new NotAuthorized(i18n.t('notAvailable', req.language));
+    }
+  }
+
   let cost;
   let unlockedAlready = false;
 
@@ -251,9 +261,10 @@ export default async function unlock (user, req = {}, analytics) {
       return invalidSet(req);
     }
 
-    cost = getIndividualItemPrice(setType, item, req);
-
     unlockedAlready = alreadyUnlocked(user, setType, firstPath);
+    if (!unlockedAlready) {
+      cost = getIndividualItemPrice(setType, item, req);
+    }
 
     // Since only an item is being unlocked here,
     // remove all the other items from the set
@@ -307,6 +318,7 @@ export default async function unlock (user, req = {}, analytics) {
 
     if (analytics) {
       analytics.track('buy', {
+        user: pick(user, ['preferences', 'registeredThrough']),
         uuid: user._id,
         itemKey: path,
         itemType: 'customization',

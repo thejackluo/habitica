@@ -1,4 +1,7 @@
-import _ from 'lodash';
+import assign from 'lodash/assign';
+import find from 'lodash/find';
+import merge from 'lodash/merge';
+import pick from 'lodash/pick';
 import moment from 'moment';
 import { authWithHeaders } from '../../middlewares/auth';
 import {
@@ -27,7 +30,7 @@ import {
   requiredGroupFields,
 } from '../../libs/tasks/utils';
 import common from '../../../common';
-import apiError from '../../libs/apiError';
+import { apiError } from '../../libs/apiError';
 
 /**
  * @apiDefine TaskNotFound
@@ -330,6 +333,7 @@ api.createChallengeTasks = {
 
     tasks.forEach(task => {
       res.analytics.track('challenge task created', {
+        user: pick(user, ['preferences', 'registeredThrough']),
         uuid: user._id,
         hitType: 'event',
         category: 'behavior',
@@ -461,10 +465,9 @@ api.getChallengeTasks = {
     const group = await Group.getGroup({
       user,
       groupId: challenge.group,
-      fields: '_id type privacy',
-      optionalMembership: true,
+      fields: '_id type privacy purchased',
     });
-    if (!group || !challenge.canView(user, group)) throw new NotFound(res.t('challengeNotFound'));
+    if (!group && !challenge.canView(user, group)) throw new NotFound(res.t('challengeNotFound'));
 
     const tasks = await getTasks(req, res, { user, challenge });
     return res.respond(200, tasks);
@@ -646,7 +649,7 @@ api.updateTask = {
       sanitizedObj = Tasks.Task.sanitize(updatedTaskObj);
     }
 
-    _.assign(task, sanitizedObj);
+    assign(task, sanitizedObj);
 
     // console.log(task.modifiedPaths(), task.toObject().repeat === tep)
     // repeat is always among modifiedPaths because mongoose changes
@@ -700,6 +703,7 @@ api.updateTask = {
 
     if (group) {
       res.analytics.track('task edit', {
+        user: pick(user, ['preferences', 'registeredThrough']),
         uuid: user._id,
         hitType: 'event',
         category: 'behavior',
@@ -752,7 +756,11 @@ api.updateTask = {
 api.scoreTask = {
   method: 'POST',
   url: '/tasks/:taskId/score/:direction',
-  middlewares: [authWithHeaders()],
+  middlewares: [authWithHeaders({
+    userFieldsToInclude: ['achievements', 'guilds', 'items.eggs', 'items.food',
+      'items.gear.equipped', 'items.hatchingPotions', 'items.lastDrop', 'items.quests', 'party',
+      'purchased.plan', 'stats', 'tasksOrder', 'webhooks'],
+  })],
   async handler (req, res) {
     // Parameters are validated in scoreTasks
 
@@ -762,7 +770,7 @@ api.scoreTask = {
 
     const userStats = user.stats.toJSON();
 
-    const resJsonData = _.assign({
+    const resJsonData = assign({
       delta: taskResponse.delta,
       _tmp: user._tmp,
     }, userStats);
@@ -840,7 +848,7 @@ api.moveTask = {
     // Cannot send $pull and $push on same field in one single op
     const pullQuery = { $pull: {} };
     pullQuery.$pull[`tasksOrder.${task.type}s`] = task.id;
-    await owner.update(pullQuery).exec();
+    await owner.updateOne(pullQuery).exec();
 
     let position = to;
     if (to === -1) position = order.length - 1; // push to bottom
@@ -850,7 +858,7 @@ api.moveTask = {
       $each: [task._id],
       $position: position,
     };
-    await owner.update(updateQuery).exec();
+    await owner.updateOne(updateQuery).exec();
 
     // Update the user version field manually,
     // it cannot be updated in the pre update hook
@@ -967,7 +975,7 @@ api.scoreCheckListItem = {
     }
     if (task.type !== 'daily' && task.type !== 'todo') throw new BadRequest(res.t('checklistOnlyDailyTodo'));
 
-    const item = _.find(task.checklist, { id: req.params.itemId });
+    const item = find(task.checklist, { id: req.params.itemId });
 
     if (!item) throw new NotFound(res.t('checklistItemNotFound'));
     item.completed = !item.completed;
@@ -1028,10 +1036,10 @@ api.updateChecklistItem = {
     verifyTaskModification(task, user, group, challenge, res);
     if (task.type !== 'daily' && task.type !== 'todo') throw new BadRequest(res.t('checklistOnlyDailyTodo'));
 
-    const item = _.find(task.checklist, { id: req.params.itemId });
+    const item = find(task.checklist, { id: req.params.itemId });
     if (!item) throw new NotFound(res.t('checklistItemNotFound'));
 
-    _.merge(item, Tasks.Task.sanitizeChecklist(req.body));
+    merge(item, Tasks.Task.sanitizeChecklist(req.body));
     const savedTask = await task.save();
 
     res.respond(200, savedTask);
@@ -1267,7 +1275,7 @@ api.unlinkAllTasks = {
           removeFromArray(user.tasksOrder[`${task.type}s`], task._id);
         }
 
-        toSave.push(task.remove());
+        toSave.push(task.deleteOne());
       });
 
       toSave.push(user.save());
@@ -1323,9 +1331,9 @@ api.unlinkOneTask = {
     } else { // remove
       if (task.type !== 'todo' || !task.completed) { // eslint-disable-line no-lonely-if
         removeFromArray(user.tasksOrder[`${task.type}s`], taskId);
-        await Promise.all([user.save(), task.remove()]);
+        await Promise.all([user.save(), task.deleteOne()]);
       } else {
-        await task.remove();
+        await task.deleteOne();
       }
     }
 
@@ -1357,7 +1365,7 @@ api.clearCompletedTodos = {
 
     // Clear completed todos
     // Do not delete completed todos from challenges or groups, unless the task is broken
-    await Tasks.Task.remove({
+    await Tasks.Task.deleteMany({
       userId: user._id,
       type: 'todo',
       completed: true,
@@ -1434,16 +1442,16 @@ api.deleteTask = {
 
       const pullQuery = { $pull: {} };
       pullQuery.$pull[`tasksOrder.${task.type}s`] = task._id;
-      const taskOrderUpdate = (challenge || user).update(pullQuery).exec();
+      const taskOrderUpdate = (challenge || user).updateOne(pullQuery).exec();
 
       // Update the user version field manually,
       // it cannot be updated in the pre update hook
       // See https://github.com/HabitRPG/habitica/pull/9321#issuecomment-354187666 for more info
       if (!challenge) user._v += 1;
 
-      await Promise.all([taskOrderUpdate, task.remove()]);
+      await Promise.all([taskOrderUpdate, task.deleteOne()]);
     } else {
-      await task.remove();
+      await task.deleteOne();
     }
 
     res.respond(200, {});

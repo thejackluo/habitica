@@ -1,27 +1,37 @@
 <template>
   <div>
+    <chat-banner />
     <static-header
-      v-if="showContentWrap"
+      v-if="showContentWrap && !loginFlow"
       :class="{
         'home-header': ['home', 'front'].indexOf($route.name) !== -1,
-        'white-header': this.$route.name === 'plans'
+        'white-header': $route.name === 'plans'
       }"
     />
-    <div class="static-wrapper">
+    <div
+      class="static-wrapper"
+      :class="{ 'groups-bg': $route.name === 'groupPlans' }"
+    >
       <router-view />
     </div>
     <div
+      id="bottom-background"
+      v-if="loginFlow"
+      class="bg-purple-300"
+    >
+      <div class="seamless_mountains_demo_repeat"></div>
+      <div class="midground_foreground_extended2"></div>
+    </div>
+    <app-footer
       v-if="showContentWrap"
       :id="footerId"
-    >
-      <app-footer />
-    </div>
+    />
     <div
       v-if="showContentWrap && footerId"
       id="bottom-wrap"
       class="purple-4"
     >
-      <div id="bottom-background">
+      <div id="bottom-background" v-if="!loginFlow">
         <div class="seamless_mountains_demo_repeat"></div>
         <div class="midground_foreground_extended2"></div>
       </div>
@@ -30,7 +40,7 @@
 </template>
 
 <style lang="scss">
-  @import '~@/assets/scss/colors.scss';
+  @import '@/assets/scss/colors.scss';
 
   .home-header {
     background: $purple-300 !important;
@@ -41,13 +51,13 @@
     padding-right: 5em !important;
 
     .logo.svg-icon {
-      width: 200px !important;
+      width: 175px !important;
     }
 
     .nav-item a {
       font-size: 14px !important;
       color: $purple-600 !important;
-      padding-top: 2.8em !important;
+      padding-top: 16px !important;
     }
 
     .nav-item a:hover {
@@ -61,8 +71,7 @@
 
     .login-button {
       padding-right: 1em;
-      margin-top: 1.8em !important;
-      border-radius: 2px;
+      border-radius: 4px;
       background-color: #9a62ff;
     }
 
@@ -132,7 +141,7 @@
         }
       }
 
-      .twitter svg {
+      .bluesky svg {
         background-color: $purple-50;
         fill: $purple-500;
         &:hover {
@@ -198,16 +207,19 @@
       color: $purple-200;
     }
 
-    li, p {
-      font-size: 16px;
-    }
-
     .media img {
       margin: 1em;
     }
 
     .strong {
       font-weight: bold;
+    }
+
+    &.groups-bg {
+      background-color: $white;
+      background-image: url('../../assets/images/group-plans-static/top.svg?raw');
+      background-repeat: no-repeat;
+      background-position-y: 56px;
     }
   }
 </style>
@@ -225,7 +237,7 @@
     position: relative;
 
     .seamless_mountains_demo_repeat {
-      background-image: url('~@/assets/images/auth/seamless_mountains_demo.png');
+      background-image: url('@/assets/images/auth/seamless_mountains_demo.png');
       background-repeat: repeat-x;
       width: 100%;
       height: 300px;
@@ -235,7 +247,7 @@
     }
 
     .midground_foreground_extended2 {
-      background-image: url('~@/assets/images/auth/midground_foreground_extended2.png');
+      background-image: url('@/assets/images/auth/midground_foreground_extended2.png');
       position: relative;
       width: 1500px;
       max-width: 100%;
@@ -247,20 +259,25 @@
 
 <script>
 import AppFooter from '@/components/appFooter';
+import ChatBanner from '@/components/header/banners/chatBanner';
 import StaticHeader from './header.vue';
 
 export default {
   components: {
     AppFooter,
+    ChatBanner,
     StaticHeader,
   },
   computed: {
-    showContentWrap () {
-      return this.$route.name !== 'news';
-    },
     footerId () {
       if (this.$route.name === 'plans') return null;
       return 'purple-footer';
+    },
+    loginFlow () {
+      return ['login', 'register', 'username'].indexOf(this.$route.name) !== -1;
+    },
+    showContentWrap () {
+      return this.$route.name !== 'news';
     },
   },
 };

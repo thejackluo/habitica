@@ -1,4 +1,5 @@
 import moment from 'moment';
+import pick from 'lodash/pick';
 import {
   BadRequest,
   NotAuthorized,
@@ -205,7 +206,7 @@ async function registerLocal (req, res, { isV3 = false }) {
 
   // Clean previous email preferences and send welcome email
   EmailUnsubscription
-    .remove({ email: savedUser.auth.local.email })
+    .deleteOne({ email: savedUser.auth.local.email })
     .then(() => {
       if (existingUser) return;
       if (newUser.registeredThrough === 'habitica-web') {
@@ -218,12 +219,11 @@ async function registerLocal (req, res, { isV3 = false }) {
 
   if (!existingUser) {
     res.analytics.track('register', {
+      user: pick(savedUser, ['preferences', 'registeredThrough']),
       category: 'acquisition',
       type: 'local',
-      gaLabel: 'local',
       uuid: savedUser._id,
       headers: req.headers,
-      user: savedUser,
     });
   }
 

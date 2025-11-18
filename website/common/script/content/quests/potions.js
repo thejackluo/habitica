@@ -170,6 +170,45 @@ const QUEST_POTIONS = {
       unlock: t('questOnyxUnlockText'),
     },
   },
+  pinkMarble: {
+    text: t('questPinkMarbleText'),
+    notes: t('questPinkMarbleNotes'),
+    completion: t('questPinkMarbleCompletion'),
+    value: 4,
+    category: 'hatchingPotion',
+    boss: {
+      name: t('questPinkMarbleBoss'),
+      hp: 1200,
+      str: 2,
+      rage: {
+        title: t('questPinkMarbleRageTitle'),
+        description: t('questPinkMarbleRageDescription'),
+        value: 50,
+        progressDrain: 0.5,
+        effect: t('questPinkMarbleRageEffect'),
+      },
+    },
+    drop: {
+      items: [
+        {
+          type: 'hatchingPotions',
+          key: 'PinkMarble',
+          text: t('questPinkMarbleDropPinkMarblePotion'),
+        }, {
+          type: 'hatchingPotions',
+          key: 'PinkMarble',
+          text: t('questPinkMarbleDropPinkMarblePotion'),
+        }, {
+          type: 'hatchingPotions',
+          key: 'PinkMarble',
+          text: t('questPinkMarbleDropPinkMarblePotion'),
+        },
+      ],
+      gp: 75,
+      exp: 800,
+      unlock: t('questPinkMarbleUnlockText'),
+    },
+  },
   ruby: {
     text: t('questRubyText'),
     notes: t('questRubyNotes'),
@@ -332,6 +371,79 @@ const QUEST_POTIONS = {
       gp: 50,
       exp: 100,
       unlock: t('questTurquoiseUnlockText'),
+    },
+  },
+  jade: {
+    text: t('questJadeText'),
+    notes: t('questJadeNotes'),
+    completion: t('questJadeCompletion'),
+    value: 4,
+    category: 'hatchingPotion',
+    boss: {
+      name: t('questJadeBoss'),
+      hp: 400,
+      str: 1.25,
+    },
+    drop: {
+      items: [
+        {
+          type: 'hatchingPotions',
+          key: 'Jade',
+          text: t('questJadeDropJadePotion'),
+        }, {
+          type: 'hatchingPotions',
+          key: 'Jade',
+          text: t('questJadeDropJadePotion'),
+        }, {
+          type: 'hatchingPotions',
+          key: 'Jade',
+          text: t('questJadeDropJadePotion'),
+        },
+      ],
+      gp: 40,
+      exp: 400,
+      unlock: t('questJadeUnlockText'),
+    },
+  },
+  opal: {
+    text: t('questOpalText'),
+    notes: t('questOpalNotes'),
+    completion: t('questOpalCompletion'),
+    value: 4,
+    category: 'hatchingPotion',
+    collect: {
+      opalGem: {
+        text: t('questOpalCollectOpalGems'),
+        count: 25,
+      },
+      libraRune: {
+        text: t('questOpalCollectLibraRunes'),
+        count: 10,
+      },
+      mercuryRune: {
+        text: t('questOpalCollectMercuryRunes'),
+        count: 10,
+      },
+    },
+    drop: {
+      items: [
+        {
+          type: 'hatchingPotions',
+          key: 'Opal',
+          text: t('questOpalDropOpalPotion'),
+        }, {
+          type: 'hatchingPotions',
+          key: 'Opal',
+          text: t('questOpalDropOpalPotion'),
+        }, {
+          type: 'hatchingPotions',
+          key: 'Opal',
+          text: t('questOpalDropOpalPotion'),
+        },
+      ],
+      gp: 50,
+      exp: 350,
+      unlock: t('questOpalUnlockText'),
     },
   },
 };

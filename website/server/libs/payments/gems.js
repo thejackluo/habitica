@@ -1,4 +1,5 @@
 import find from 'lodash/find';
+import pick from 'lodash/pick';
 import { getAnalyticsServiceByEnvironment } from '../analyticsService';
 import { getCurrentEventList } from '../worldState'; // eslint-disable-line import/no-cycle
 import { // eslint-disable-line import/no-cycle
@@ -10,7 +11,7 @@ import shared from '../../../common';
 import {
   BadRequest,
 } from '../errors';
-import apiError from '../apiError';
+import { apiError } from '../apiError';
 
 const analytics = getAnalyticsServiceByEnvironment();
 
@@ -50,7 +51,7 @@ async function buyGemGift (data) {
     data.gift.member._id !== data.user._id
     && data.gift.member.preferences.pushNotifications.giftedGems !== false
   ) {
-    sendPushNotification(
+    await sendPushNotification(
       data.gift.member,
       {
         title: shared.i18n.t('giftedGems', languages[1]),
@@ -114,6 +115,7 @@ export async function buyGems (data) {
   if (!data.gift) txnEmail(data.user, 'donation');
 
   analytics.trackPurchase({
+    user: pick(data.user, ['preferences', 'registeredThrough']),
     uuid: data.user._id,
     itemPurchased: 'Gems',
     sku: `${data.paymentMethod.toLowerCase()}-checkout`,

@@ -1,13 +1,14 @@
 import get from 'lodash/get';
 import includes from 'lodash/includes';
 import keys from 'lodash/keys';
+import pick from 'lodash/pick';
 import i18n from '../../i18n';
 import content from '../../content/index';
 import {
   BadRequest,
   NotAuthorized,
 } from '../../libs/errors';
-import errorMessage from '../../libs/errorMessage';
+import { errorMessage } from '../../libs/errorMessage';
 import getItemInfo from '../../libs/getItemInfo';
 import { removeItemByPath } from '../pinnedGearUtils';
 import updateUserHourglasses from '../updateUserHourglasses';
@@ -95,6 +96,7 @@ export default async function purchaseHourglass (user, req = {}, analytics, quan
 
   if (analytics) {
     analytics.track('buy', {
+      user: pick(user, ['preferences', 'registeredThrough']),
       uuid: user._id,
       itemKey: key,
       itemType: type,

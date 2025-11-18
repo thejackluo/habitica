@@ -39,7 +39,7 @@
           {{ $t('notifications') }}
         </h4>
         <a
-          class="small-link standard-link"
+          class="small-link"
           :disabled="notificationsCount === 0"
           @click="dismissAll"
         >{{ $t('dismissAll') }}</a>
@@ -48,6 +48,12 @@
       <onboarding-guide
         v-if="showOnboardingGuide"
         :never-seen="hasSpecialBadge"
+      />
+      <gift-one-get-one-notification
+        v-if="shouldShowG1g1"
+        :notification="g1g1Notification"
+        :event-key="g1g1EventKey"
+        @notification-removed="handleG1g1Removed"
       />
       <component
         :is="notification.type"
@@ -73,7 +79,7 @@
 </template>
 
 <style lang='scss' scoped>
-  @import '~@/assets/scss/colors.scss';
+  @import '@/assets/scss/colors.scss';
 
   .dropdown-item {
     padding: 16px 24px;
@@ -112,34 +118,36 @@
 </style>
 
 <script>
-import { mapState, mapActions } from '@/libs/store';
 import * as quests from '@/../../common/script/content/quests';
 import { hasCompletedOnboarding } from '@/../../common/script/libs/onboarding';
-import notificationsIcon from '@/assets/svg/notifications.svg';
+import find from 'lodash/find';
+import { mapState, mapActions } from '@/libs/store';
+import notificationsIcon from '@/assets/svg/notifications.svg?raw';
 import MenuDropdown from '../ui/customMenuDropdown';
-import MessageCount from './messageCount';
+import MessageCount from './messageCount.functional.vue';
 import { CONSTANTS, getLocalSetting, setLocalSetting } from '@/libs/userlocalManager';
-import successImage from '@/assets/svg/success.svg';
-import starBadge from '@/assets/svg/star-badge.svg';
+import successImage from '@/assets/svg/success.svg?raw';
+import starBadge from '@/assets/svg/star-badge.svg?raw';
 
 // Notifications
-import NEW_STUFF from './notifications/newStuff';
-import GROUP_TASK_NEEDS_WORK from './notifications/groupTaskNeedsWork';
-import GUILD_INVITATION from './notifications/guildInvitation';
-import PARTY_INVITATION from './notifications/partyInvitation';
-import CHALLENGE_INVITATION from './notifications/challengeInvitation';
-import QUEST_INVITATION from './notifications/questInvitation';
+import CARD_RECEIVED from './notifications/cardReceived';
+import CHALLENGE_INVITATION from './notifications/challengeInvitation.functional.vue';
+import GIFT_ONE_GET_ONE from './notifications/g1g1';
 import GROUP_TASK_ASSIGNED from './notifications/groupTaskAssigned';
 import GROUP_TASK_CLAIMED from './notifications/groupTaskClaimed';
-import UNALLOCATED_STATS_POINTS from './notifications/unallocatedStatsPoints';
-import NEW_MYSTERY_ITEMS from './notifications/newMysteryItems';
-import CARD_RECEIVED from './notifications/cardReceived';
-import NEW_INBOX_MESSAGE from './notifications/newPrivateMessage';
+import GROUP_TASK_NEEDS_WORK from './notifications/groupTaskNeedsWork';
+import GUILD_INVITATION from './notifications/guildInvitation';
+import ITEM_RECEIVED from './notifications/itemReceived';
 import NEW_CHAT_MESSAGE from './notifications/newChatMessage';
-import WORLD_BOSS from './notifications/worldBoss';
-import VERIFY_USERNAME from './notifications/verifyUsername';
+import NEW_INBOX_MESSAGE from './notifications/newPrivateMessage';
+import NEW_MYSTERY_ITEMS from './notifications/newMysteryItems';
+import NEW_STUFF from './notifications/newStuff';
 import ONBOARDING_COMPLETE from './notifications/onboardingComplete';
-import GIFT_ONE_GET_ONE from './notifications/g1g1';
+import PARTY_INVITATION from './notifications/partyInvitation';
+import QUEST_INVITATION from './notifications/questInvitation';
+import UNALLOCATED_STATS_POINTS from './notifications/unallocatedStatsPoints';
+import VERIFY_USERNAME from './notifications/verifyUsername';
+import WORLD_BOSS from './notifications/worldBoss';
 import OnboardingGuide from './onboardingGuide';
 
 export default {
@@ -147,24 +155,26 @@ export default {
     MenuDropdown,
     MessageCount,
     // One component for each type
-    NEW_STUFF,
-    GROUP_TASK_NEEDS_WORK,
-    GUILD_INVITATION,
-    PARTY_INVITATION,
+    CARD_RECEIVED,
     CHALLENGE_INVITATION,
-    QUEST_INVITATION,
+    GIFT_ONE_GET_ONE,
+    GiftOneGetOneNotification: GIFT_ONE_GET_ONE,
     GROUP_TASK_ASSIGNED,
     GROUP_TASK_CLAIMED,
-    UNALLOCATED_STATS_POINTS,
-    NEW_MYSTERY_ITEMS,
-    CARD_RECEIVED,
-    NEW_INBOX_MESSAGE,
+    GROUP_TASK_NEEDS_WORK,
+    GUILD_INVITATION,
+    ITEM_RECEIVED,
     NEW_CHAT_MESSAGE,
-    WorldBoss: WORLD_BOSS,
-    VERIFY_USERNAME,
-    OnboardingGuide,
+    NEW_INBOX_MESSAGE,
+    NEW_MYSTERY_ITEMS,
+    NEW_STUFF,
     ONBOARDING_COMPLETE,
-    GIFT_ONE_GET_ONE,
+    PARTY_INVITATION,
+    QUEST_INVITATION,
+    UNALLOCATED_STATS_POINTS,
+    VERIFY_USERNAME,
+    WorldBoss: WORLD_BOSS,
+    OnboardingGuide,
   },
   data () {
     return {
@@ -176,16 +186,14 @@ export default {
       hasSpecialBadge: false,
       quests,
       openStatus: undefined,
+      g1g1Hidden: false,
       actionableNotifications: [
         'GUILD_INVITATION', 'PARTY_INVITATION', 'CHALLENGE_INVITATION',
         'QUEST_INVITATION',
       ],
-      // A list of notifications handled by this component,
-      // listed in the order they should appear in the notifications panel.
-      // NOTE: Those not listed here won't be shown in the notification panel!
       handledNotifications: [
         'NEW_STUFF',
-        'GIFT_ONE_GET_ONE',
+        'ITEM_RECEIVED',
         'GROUP_TASK_NEEDS_WORK',
         'GUILD_INVITATION',
         'PARTY_INVITATION',
@@ -204,7 +212,10 @@ export default {
     };
   },
   computed: {
-    ...mapState({ user: 'user.data' }),
+    ...mapState({
+      user: 'user.data',
+      currentEventList: 'worldState.data.currentEventList',
+    }),
     notificationsOrder () {
       // Returns a map of NOTIFICATION_TYPE -> POSITION
       const orderMap = {};
@@ -283,9 +294,9 @@ export default {
 
       return notifications;
     },
-    // The total number of notification, shown inside the dropdown
     notificationsCount () {
-      return this.notifications.length;
+      const g1g1Count = this.shouldShowG1g1 ? 1 : 0;
+      return this.notifications.length + g1g1Count;
     },
     hasUnseenNotifications () {
       return this.notifications.some(notification => (notification.seen === false));
@@ -295,6 +306,30 @@ export default {
     },
     showOnboardingGuide () {
       return !hasCompletedOnboarding(this.user);
+    },
+    currentG1g1Event () {
+      return find(this.currentEventList, event => event.promo === 'g1g1');
+    },
+    g1g1EventKey () {
+      if (!this.currentG1g1Event || !this.currentG1g1Event.start) return null;
+      const startDate = new Date(this.currentG1g1Event.start);
+      return `${startDate.getFullYear()}-${startDate.getMonth()}`;
+    },
+    shouldShowG1g1 () {
+      if (!this.currentG1g1Event) return false;
+      const eventKey = this.g1g1EventKey;
+      if (eventKey && window.sessionStorage.getItem(`hide-g1g1-${eventKey}`) === 'true') {
+        return false;
+      }
+      return !this.g1g1Hidden;
+    },
+    g1g1Notification () {
+      return {
+        type: 'GIFT_ONE_GET_ONE',
+        id: `g1g1-event-${this.currentG1g1Event?.start || 'default'}`,
+        data: {},
+        seen: false,
+      };
     },
   },
   mounted () {
@@ -360,6 +395,9 @@ export default {
     },
     isActionable (notification) {
       return this.actionableNotifications.indexOf(notification.type) !== -1;
+    },
+    handleG1g1Removed () {
+      this.g1g1Hidden = true;
     },
   },
 

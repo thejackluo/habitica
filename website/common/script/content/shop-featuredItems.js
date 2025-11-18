@@ -1,82 +1,96 @@
-import moment from 'moment';
-import { EVENTS } from './constants';
+import { getScheduleMatchingGroup } from './constants';
 // Magic Hatching Potions are configured like this:
 // type: 'premiumHatchingPotion',  // note no "s" at the end
 // path: 'premiumHatchingPotions.Rainbow',
+
+const potentialFeaturedPetQuests = [
+  'nudibranch',
+  'yarn',
+
+  'slime',
+  'cat',
+
+  'frog',
+  'otter',
+
+  'monkey',
+  'alpaca',
+
+  'sloth',
+  'platypus',
+
+  'hippo',
+  'giraffe',
+
+  'guineapig',
+  'chameleon',
+
+  'cheetah',
+  'crab',
+
+  'beetle',
+  'raccoon',
+
+  'snail',
+  'dog',
+
+  'kangaroo',
+  'owl',
+
+  'ghost_stag',
+  'sabretooth',
+];
+
 const featuredItems = {
   market () {
-    if (moment().isBetween(EVENTS.winter2023.start, EVENTS.winter2023.end)) {
-      return [
-        {
-          type: 'armoire',
-          path: 'armoire',
-        },
-        {
+    const featured = [{
+      type: 'armoire',
+      path: 'armoire',
+    }];
+    const itemKeys = getScheduleMatchingGroup('premiumHatchingPotions').items;
+    itemKeys.forEach(itemKey => {
+      if (featured.length < 4) {
+        featured.push({
           type: 'premiumHatchingPotion',
-          path: 'premiumHatchingPotions.StarryNight',
-        },
-        {
-          type: 'premiumHatchingPotion',
-          path: 'premiumHatchingPotions.Holly',
-        },
-        {
-          type: 'premiumHatchingPotion',
-          path: 'premiumHatchingPotions.Aurora',
-        },
-      ];
-    }
-    return [
-      {
-        type: 'armoire',
-        path: 'armoire',
-      },
-      {
-        type: 'food',
-        path: 'food.RottenMeat',
-      },
-      {
-        type: 'hatchingPotions',
-        path: 'hatchingPotions.CottonCandyBlue',
-      },
-      {
-        type: 'eggs',
-        path: 'eggs.FlyingPig',
-      },
-    ];
+          path: `premiumHatchingPotions.${itemKey}`,
+        });
+      }
+    });
+    return featured;
   },
   quests () {
-    if (moment().isBetween(EVENTS.winter2023.start, EVENTS.winter2023.end)) {
-      return [
-        {
-          type: 'bundles',
-          path: 'bundles.winterQuests',
-        },
-        {
+    const featured = [];
+    const petQuestKeys = getScheduleMatchingGroup('petQuests').items;
+    petQuestKeys.forEach(itemKey => {
+      if (potentialFeaturedPetQuests.includes(itemKey)) {
+        featured.push({
           type: 'quests',
-          path: 'quests.whale',
-        },
-        {
-          type: 'quests',
-          path: 'quests.turtle',
-        },
-      ];
-    }
-    return [
-      {
+          path: `quests.${itemKey}`,
+        });
+      }
+    });
+    const hatchingPotionQuests = getScheduleMatchingGroup('hatchingPotionQuests').items;
+    hatchingPotionQuests.forEach(itemKey => {
+      featured.push({
         type: 'quests',
-        path: 'quests.slime',
-      },
-      {
-        type: 'quests',
-        path: 'quests.seaserpent',
-      },
-      {
-        type: 'quests',
-        path: 'quests.unicorn',
-      },
-    ];
+        path: `quests.${itemKey}`,
+      });
+    });
+    return featured;
   },
-  seasonal: 'winter2022Healer',
+  seasonal () {
+    const featured = [];
+    const itemKeys = getScheduleMatchingGroup('premiumHatchingPotions').items;
+    itemKeys.forEach(itemKey => {
+      if (featured.length < 4) {
+        featured.push({
+          type: 'premiumHatchingPotion',
+          path: `premiumHatchingPotions.${itemKey}`,
+        });
+      }
+    });
+    return featured;
+  },
   timeTravelers: [
     // TODO
   ],
